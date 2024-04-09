@@ -19,7 +19,7 @@ Latest release from PyPI:
 pip install fast_gauss
 ```
 
-Latest build from GitHub:
+Latest commit from GitHub:
 
 ```shell
 pip install git+https://github.com/dendenxu/fast-gaussian-rasterization
