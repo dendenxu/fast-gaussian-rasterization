@@ -239,11 +239,17 @@ class GSplatContextManager:
         x, y, w, h = gl.glGetIntegerv(gl.GL_VIEWPORT)
         gl.glViewport(0, 0, W, H)
         gl.glScissor(0, 0, W, H)  # only render in this small region of the viewport
+
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)  # for offscreen rendering to textures
+        gl.glClearColor(0, 0, 0, 1.)
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+
         gl.glBindVertexArray(self.vao)
         gl.glDrawArrays(gl.GL_POINTS, 0, len(idx))  # number of vertices
         gl.glBindVertexArray(0)
+
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+
         gl.glViewport(x, y, w, h)
         gl.glScissor(x, y, w, h)
 
@@ -267,7 +273,7 @@ class GSplatContextManager:
                                                              H,  # height
                                                              kind,  # kind
                                                              torch.cuda.current_stream().cuda_stream))  # stream
-        CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))  # MARK: SYNC
+        CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))
 
         return rgba_map  # H, W, 4
 
