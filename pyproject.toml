@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fast_gauss"
+version = "0.0.1"
+description = "CUDA global sort + CUDA-GL interop + geometry shader quad emitting + hardware rasterization + CUDA-GL interop = fast gaussian splatting"
+readme = "readme.md"
+license = { file = "license" }
+authors = [{ email = "zhenx@zju.edu.cn" }, { name = "Zhen Xu" }]
+requires-python = ">=3.9"
+dynamic = ["dependencies", "optional-dependencies"]
+
+[project.urls]
+homepage = "https://github.com/dendenxu/fast-gaussian-splatting"
+
+
+[tool.setuptools.packages.find]
+include = ["fast_gauss*"]
+exclude = ["data"]
+where = ["fast_gauss"]
+
+[tool.setuptools.package-data]
+"*" = [
+    "*.yaml",
+    "*.json",
+    "*.py",
+    "*.yml",
+
+    "*.frag",
+    "*.geom",
+    "*.vert",
+    "*.glsl",
+] # yes, .py not needed here, but just for clarification that you can use py for config
+
+[project.scripts]
+evc = "easyvolcap.scripts.wrap:main_entrypoint"
+evc-test = "easyvolcap.scripts.wrap:test_entrypoint"
+evc-train = "easyvolcap.scripts.wrap:train_entrypoint"
+
+evc-ws = "easyvolcap.scripts.wrap:ws_entrypoint"
+evc-gui = "easyvolcap.scripts.wrap:gui_entrypoint"
+evc-dist = "easyvolcap.scripts.wrap:dist_entrypoint"
+evc-prof = "easyvolcap.scripts.wrap:prof_entrypoint"
+
+# volcap = "easyvolcap.scripts.wrap:main_entrypoint"
+# volcap-test = "easyvolcap.scripts.wrap:test_entrypoint"
+# volcap-train = "easyvolcap.scripts.wrap:train_entrypoint"
+
+# volcap-gui = "easyvolcap.scripts.wrap:gui_entrypoint"
+# volcap-dist = "easyvolcap.scripts.wrap:dist_entrypoint"
+# volcap-prof = "easyvolcap.scripts.wrap:prof_entrypoint"
+
+# This should only serve as a commanline registration
+# Dependencies are expected to be installed separatedly
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+# NOTE: Somehow, installing with pip install -e ".[dev]" will cause pip to try to install other packages with the dev feature as well..
+# Like running: pip install mediapipe[dev], however such feature doesn't exist in mediapipe, thus the installation fails
+# So we opted to change the name for a full development install from "dev" to "devel"
+# optional-dependencies = { dev = { file = ["requirements-devel.txt"] } }
+optional-dependencies = { devel = { file = ["requirements-devel.txt"] } }
