@@ -59,7 +59,7 @@ Thus if you're running in a GUI (OpenGL-based) environment, the output of our ra
 - [ ] TODO: Add a warning to the user if they're performing further processing on the returned values.
 
 
-**Note: the speedup is mostly visible when the pixel-to-point ratio is high.**
+**Note: the speedup is the most visible when the pixel-to-point ratio is high.**
 
 That is, when there're large gaussians and very high resolution rendering, the speedup is more visible.
 
@@ -120,7 +120,7 @@ CUDA-GL interop & EGL environment inspired by:
 
 ```bibtex
 @misc{fast_gauss,  
-    title = {Fast Gaussian Splatting},
+    title = {Fast Gaussian Rasterization},
     howpublished = {GitHub},  
     year = {2024},
     url = {https://github.com/dendenxu/fast-gaussian-rasterization}
