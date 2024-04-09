@@ -49,11 +49,12 @@ Thus if you're running in a GUI (OpenGL-based) environment, the output of our ra
 - [ ] TODO: Improve offline rendering performance.
 - [ ] TODO: Add a warning to the user if they're performing further processing on the returned values.
 
-Note: it's recommended to pass in a CPU tensor in the GaussianRasterizationSettings to avoid explicit synchronizations for even better performance.
+**Note: it's recommended to pass in a CPU tensor in the GaussianRasterizationSettings to avoid explicit synchronizations for even better performance.**
 
 - [ ] TODO: Add a warning to the user if GPU tensors are detected.
 
-Note: the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for the backward pass), but the alpha values of the rendered image instead.
+**Note: the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for the backward pass), but the alpha values of the rendered image instead.**
+
 And the alpha channel content seems to be bugged currently, will debug.
 
 - [ ] TODO: Debug alpha channel
@@ -100,6 +101,6 @@ CUDA-GL interop & EGL environment inspired by:
     title = {Fast Gaussian Splatting},
     howpublished = {GitHub},  
     year = {2024},
-    url = {https://github.com/dendenxu/fast-gaussian-rasterization}
+    url = {https://github.com/dendenxu/fast-gaussian-splatting}
 }
 ```
