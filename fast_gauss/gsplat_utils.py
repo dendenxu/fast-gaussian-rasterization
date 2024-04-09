@@ -33,7 +33,7 @@ class GSplatContextManager:
                  init_buffer_size: int = 32768,
                  init_texture_size: List[int] = [512, 512],
                  dtype: str = torch.float,  # +5-10 fps on 3060, not working too well with flame_salmon
-                 tex_dtype: str = torch.float,  # +5-10 fps on 3060, not working too well with flame_salmon
+                 tex_dtype: str = torch.half,  # +5-10 fps on 3060, not working too well with flame_salmon
                  ):
         self.attr_sizes = [3, 3, 3, 4]  # verts, cov6, rgba4
         self.dtype = getattr(torch, dtype) if isinstance(dtype, str) else dtype
@@ -234,6 +234,7 @@ class GSplatContextManager:
         CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
 
         # Perform actual rendering
+        self.use_gl_program(self.gsplat_program)
         self.upload_gl_uniforms(raster_settings)
         x, y, w, h = gl.glGetIntegerv(gl.GL_VIEWPORT)
         gl.glViewport(0, 0, W, H)
@@ -297,4 +298,4 @@ class GSplatContextManager:
         image, alpha = image.permute(2, 0, 1), alpha.permute(2, 0, 1)
 
         # FIXME: Alpha channel seems to be bugged
-        return image, torch.ones_like(alpha)
+        return image.float(), torch.ones_like(alpha).float()

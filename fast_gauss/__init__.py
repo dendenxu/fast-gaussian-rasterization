@@ -23,7 +23,7 @@ class GaussianRasterizationSettings(NamedTuple):
 
 
 class GaussianRasterizer:
-    def __init__(self, raster_settings: GaussianRasterizationSettings, dtype=torch.float, tex_dtype=torch.float):
+    def __init__(self, raster_settings: GaussianRasterizationSettings, dtype=torch.float, tex_dtype=torch.half):
         super().__init__()
         self.raster_settings = raster_settings
 
