@@ -670,7 +670,7 @@ class Timer:
         last = self.event_last.get(event, 0)
         denom = self.event_denom.get(event, 0)
 
-        if (curr - last) > log_interval:  # if this is true, will never have printed
+        if (curr - last) > log_interval and log_interval > 0:  # if this is true, will never have printed
             log(f"{(acc + diff) / (denom + 1) * 1000:8.3f} ms", event, back=3)
             self.event_acc[event] = 0
             self.event_denom[event] = 0

@@ -371,5 +371,6 @@ def eval_sh(deg: int, sh: torch.Tensor, dirs: torch.Tensor):
     if deg <= 0:                  return eval_shfs_4d_00(sh, dirs, torch.as_tensor([]), torch.as_tensor([]))
     elif deg <= 1:                return eval_shfs_4d_10(sh, dirs, torch.as_tensor([]), torch.as_tensor([]))
     elif deg <= 2:                return eval_shfs_4d_20(sh, dirs, torch.as_tensor([]), torch.as_tensor([]))
+    elif deg <= 3:                return eval_shfs_4d_30(sh, dirs, torch.as_tensor([]), torch.as_tensor([]))
     else: raise NotImplementedError('Unsupported SH dimension')
     # fmt: on

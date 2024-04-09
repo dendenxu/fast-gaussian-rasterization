@@ -14,10 +14,12 @@ from .sh_utils import eval_sh
 from .cuda_utils import CHECK_CUDART_ERROR
 from .math_utils import normalize, point_padding
 from .gl_utils import load_shader_source, use_gl_program
-from .gaussian_utils import build_scaling_rotation, strip_symmetric
+from .gaussian_utils import build_cov6, in_frustrum
 
 import OpenGL.GL as gl
 from OpenGL.GL import shaders
+
+timer = Timer(disabled=True)
 
 
 class GSplatContextManager:
@@ -218,9 +220,11 @@ class GSplatContextManager:
 
     @torch.no_grad()
     def render(self, xyz3: torch.Tensor, cov6: torch.Tensor, rgb3: torch.Tensor, occ1: torch.Tensor, raster_settings: 'GaussianRasterizationSettings'):
+        # Prepare OpenGL texture size
         H, W = raster_settings.image_height, raster_settings.image_width
         self.resize_textures(H, W)
         self.resize_buffers(len(xyz3))
+        timer.record('resize')
 
         # Compute GS
         data = torch.cat([xyz3, cov6, rgb3, occ1], dim=-1)
@@ -229,6 +233,7 @@ class GSplatContextManager:
         view = point_padding(xyz3) @ raster_settings.viewmatrix.to('cuda', non_blocking=True)
         idx = view[..., 2].argsort(descending=True)  # S, sorted
         data = data[idx].ravel().contiguous()  # sorted data on gpu
+        timer.record('sorting')
 
         # Upload sorted data to OpenGL for rendering
         from cuda import cudart
@@ -244,6 +249,7 @@ class GSplatContextManager:
                                                   kind,
                                                   torch.cuda.current_stream().cuda_stream))
         CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
+        timer.record('copy')
 
         if self.offline_rendering:
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)  # for offscreen rendering to textures
@@ -260,6 +266,7 @@ class GSplatContextManager:
         gl.glBindVertexArray(0)
         gl.glViewport(x, y, w, h)
         gl.glScissor(x, y, w, h)
+        timer.record('rasterize')
 
         # Prepare the output
         if self.offline_rendering:
@@ -302,17 +309,45 @@ class GSplatContextManager:
         cov3D_precomp: torch.Tensor,  # N, 6
         raster_settings: 'GaussianRasterizationSettings',
     ):
-        if cov3D_precomp is None:
-            L = build_scaling_rotation(scales, rotations)
-            cov3D_precomp = strip_symmetric(L @ L.mT)  # N, 6
+        # FIXME: This preprocessing stage is extremely slow, need to optimize this to raw cuda or write it in the shader
+        timer.record('other')
+        if raster_settings.prefiltered:
 
-        if colors_precomp is None:
-            C = raster_settings.campos.to('cuda', non_blocking=True)  # 3,
-            dirs = normalize(means3D - C)
-            colors_precomp = eval_sh(raster_settings.sh_degree, shs.mT, dirs)
-            colors_precomp = (colors_precomp + 0.5).clip(0, 1)
+            if cov3D_precomp is None:
+                cov3D_precomp = build_cov6(scales, rotations)  # N, 6
+                timer.record('cov6')
+
+            if colors_precomp is None:
+                C = raster_settings.campos.to('cuda', non_blocking=True)  # 3,
+                dirs = normalize(means3D - C)
+                colors_precomp = eval_sh(raster_settings.sh_degree, shs.mT, dirs)
+                colors_precomp = (colors_precomp + 0.5).clip(0, 1)
+                timer.record('sh')
+
+        else:
+
+            visible = in_frustrum(means3D, raster_settings.projmatrix.to('cuda', non_blocking=True)).nonzero()[..., 0]  # S, # MARK: SYNC
+            means3D = means3D[visible]
+            opacities = opacities[visible]
+            timer.record('frustrum')
+
+            if cov3D_precomp is None:
+                cov3D_precomp = build_cov6(scales[visible], rotations[visible])
+                timer.record('cov6')
+            else:
+                cov3D_precomp = cov3D_precomp[visible]
+
+            if colors_precomp is None:
+                C = raster_settings.campos.to('cuda', non_blocking=True)  # 3,
+                dirs = normalize(means3D - C)
+                colors_precomp = eval_sh(raster_settings.sh_degree, shs[visible].mT, dirs)
+                colors_precomp = (colors_precomp + 0.5).clip(0, 1)
+                timer.record('sh')
+            else:
+                colors_precomp = colors_precomp[visible]
 
         rgba_map = self.render(means3D, cov3D_precomp, colors_precomp, opacities, raster_settings)
+        timer.record('return')
 
         if self.offline_rendering:
             image, alpha = rgba_map.split([3, 1], dim=-1)
