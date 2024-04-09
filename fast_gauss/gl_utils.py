@@ -1,7 +1,6 @@
 import os
 import sys
-
-from typing import Dict, Union, List
+from typing import Union
 
 from .console_utils import *
 
@@ -10,12 +9,11 @@ from .console_utils import *
 # Environment variable messaging
 # Need to export EGL_DEVICE_ID before trying to import egl
 # And we need to consider the case when we're performing distributed training
-# from easyvolcap.engine import cfg, args  # FIXME: GLOBAL IMPORTS
-if 'easyvolcap.engine' in sys.modules and \
-    (sys.modules['easyvolcap.engine'].args.type != 'gui' or \
-        sys.modules['easyvolcap.engine'].cfg.viewer_cfg.type != 'VolumetricVideoViewer'): # FIXME: GLOBAL VARIABLES
+# from easyvolcap.engine import cfg, args
+if 'OpenGL' not in sys.modules:
     try:
         from .egl_utils import create_opengl_context, eglContextManager
+        eglctx = eglContextManager()
     except Exception as e:
         log(yellow(f'Could not import EGL related modules. {type(e).__name__}: {e}'))
         os.environ['PYOPENGL_PLATFORM'] = ''

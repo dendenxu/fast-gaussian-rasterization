@@ -29,7 +29,7 @@ class GaussianRasterizer:
 
     def forward(self,
                 means3D: torch.Tensor,
-                means2D: torch.Tensor, # only to match the api, can be none, not used
+                means2D: torch.Tensor,  # only to match the api, can be none, not used
                 opacities: torch.Tensor,
                 shs: torch.Tensor = None,
                 colors_precomp: torch.Tensor = None,
@@ -57,4 +57,4 @@ class GaussianRasterizer:
             rotations,
             cov3D_precomp,
             raster_settings,
-        ) # will output 3 channel rgb + 1 channel alpha, instead of radii
+        )  # will output 3 channel rgb + 1 channel alpha, instead of radii

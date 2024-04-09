@@ -288,4 +288,5 @@ class GSplatContextManager:
             colors_precomp = eval_sh(raster_settings.sh_degree, shs.mT, dirs)
 
         rgb_map = self.render(means3D, cov3D_precomp, colors_precomp, opacities, raster_settings)
-        return rgb_map.split([3, 1], dim=-1)
+        image, alpha = rgb_map.split([3, 1], dim=-1)
+        return image.permute(1, 2, 0), alpha.permute(1, 2, 0)
