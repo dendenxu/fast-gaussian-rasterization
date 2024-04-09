@@ -13,11 +13,19 @@ Discussion welcomed.
 
 ## Installation
 
-No CUDA compilation is required.
+Latest release from PyPI:
 
 ```shell
 pip install fast_gauss
 ```
+
+Latest build from GitHub:
+
+```shell
+pip install git+https://github.com/dendenxu/fast-gaussian-rasterization
+```
+
+No CUDA compilation is required to build `fast_gauss` since we're shader-based for now.
 
 ## Usage
 
