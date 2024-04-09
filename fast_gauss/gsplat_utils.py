@@ -92,12 +92,9 @@ class GSplatContextManager:
         M = glm.identity(mat4)
         VM = V * M
 
-        fx = raster_settings.tanfovx
-        fy = raster_settings.tanfovy
-
         gl.glUniformMatrix4fv(self.uniforms.P, 1, gl.GL_FALSE, glm.value_ptr(P))  # o2c
         gl.glUniformMatrix4fv(self.uniforms.VM, 1, gl.GL_FALSE, glm.value_ptr(VM))  # o2w
-        gl.glUniform2f(self.uniforms.focal, fx * 0.5 * raster_settings.image_width, fy * 0.5 * raster_settings.image_height)  # focal in pixel space
+        gl.glUniform2f(self.uniforms.focal, 0.5 * raster_settings.image_width / raster_settings.tanfovx, 0.5 * raster_settings.image_height / raster_settings.tanfovy)  # focal in pixel space
         gl.glUniform2f(self.uniforms.basisViewport, 1 / raster_settings.image_width, 1 / raster_settings.image_height)  # focal
 
     def init_gl_buffers(self, v: int = 0):
@@ -293,8 +290,11 @@ class GSplatContextManager:
             C = raster_settings.campos.to('cuda', non_blocking=True)  # 3,
             dirs = normalize(means3D - C)
             colors_precomp = eval_sh(raster_settings.sh_degree, shs.mT, dirs)
+            colors_precomp = (colors_precomp + 0.5).clip(0, 1)
 
         rgba_map = self.render(means3D, cov3D_precomp, colors_precomp, opacities, raster_settings)
         image, alpha = rgba_map.split([3, 1], dim=-1)
         image, alpha = image.permute(2, 0, 1), alpha.permute(2, 0, 1)
-        return image, alpha
+
+        # FIXME: Alpha channel seems to be bugged
+        return image, torch.ones_like(alpha)

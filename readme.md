@@ -41,6 +41,9 @@ from fast_gauss import GaussianRasterizationSettings, GaussianRasterizer
 And you're good to go.
 
 Note that the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for backward), but the alpha values of the rendered image instead.
+And the alpha channel content seems to be bugged for now, will debug.
+
+- [ ] TODO: Debug alpha channel
 
 It's also recommended to pass in a CPU tensor in the GaussianRasterizationSettings to avoid explicit synchronizations for even better performance.
 

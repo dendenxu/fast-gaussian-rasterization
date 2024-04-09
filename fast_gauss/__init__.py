@@ -4,7 +4,7 @@ from typing import NamedTuple
 
 from .gsplat_utils import GSplatContextManager
 
-raster_context = GSplatContextManager()  # only created once during import
+raster_context = None
 
 
 class GaussianRasterizationSettings(NamedTuple):
@@ -23,9 +23,13 @@ class GaussianRasterizationSettings(NamedTuple):
 
 
 class GaussianRasterizer:
-    def __init__(self, raster_settings: GaussianRasterizationSettings):
+    def __init__(self, raster_settings: GaussianRasterizationSettings, dtype=torch.float, tex_dtype=torch.float):
         super().__init__()
         self.raster_settings = raster_settings
+
+        global raster_context
+        if raster_context is None or raster_context.dtype != dtype or raster_context.tex_dtype != tex_dtype:
+            raster_context = GSplatContextManager(dtype=dtype, tex_dtype=tex_dtype)  # only created once
 
     def __call__(self,
                  means3D: torch.Tensor,
