@@ -43,12 +43,8 @@ class GSplatContextManager:
         self.uniforms = dotdict()  # uniform values
 
         # Perform actual rendering
-        try:
-            from .egl_utils import egl
-            self.offline_rendering = egl.eglGetCurrentContext() != egl.EGL_NO_CONTEXT
-        except:
-            from .gl_utils import eglctx
-            self.offline_rendering = eglctx is not None
+        from .gl_utils import eglctx
+        self.offline_rendering = eglctx is not None
 
         self.compile_shaders()
         self.use_gl_program(self.gsplat_program)

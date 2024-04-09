@@ -1,7 +1,7 @@
 # Fast Gaussian Splatting
 
 - **5-10x faster rendering than the original software CUDA rasterizer ([diff-gaussian-rasterization](https://github.com/graphdeco-inria/diff-gaussian-rasterization)).**
-- **2-3x faster if you using offline rendering. (Bottleneck: copying rendered images around, thinking about improvements.)**
+- **2-3x faster if using offline rendering. (Bottleneck: copying rendered images around, thinking about improvements.)**
 
 No backward pass supported yet. 
 Will think of ways to add a backward. 
@@ -56,6 +56,8 @@ Currently we will try to automatically detect whether you're managing your own O
 
 If detected, all rendering command will return `None`s and we will directly write to the bound framebuffer at the time of the draw call.
 
+- [ ] TODO: Improve offline rendering performance.
+
 ## TODOs
 
 - [ ] TODO: Thinks of ways for backward pass
@@ -96,7 +98,7 @@ CUDA-GL interop & EGL environment inspired by:
 ```bibtex
 @misc{fast_gauss,  
     title = {Fast Gaussian Splatting},
-    howpublished = {Github},  
+    howpublished = {GitHub},  
     year = {2024},
     url = {https://github.com/dendenxu/fast-gaussian-rasterization}
 }
