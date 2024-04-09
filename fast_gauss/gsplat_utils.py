@@ -39,8 +39,16 @@ class GSplatContextManager:
         self.dtype = getattr(torch, dtype) if isinstance(dtype, str) else dtype
         self.tex_dtype = getattr(torch, tex_dtype) if isinstance(tex_dtype, str) else tex_dtype
         self.gl_tex_dtype = gl.GL_RGBA16F if self.tex_dtype == torch.half else gl.GL_RGBA32F
-        self.gl_attr_dtypes = [gl.GL_FLOAT if self.dtype == torch.float else gl.GL_HALF_FLOAT] * len(self.attr_sizes)  # TODO: maybe use half here
+        self.gl_attr_dtypes = [gl.GL_FLOAT if self.dtype == torch.float else gl.GL_HALF_FLOAT] * len(self.attr_sizes)
         self.uniforms = dotdict()  # uniform values
+
+        # Perform actual rendering
+        try:
+            from .egl_utils import egl
+            self.offline_rendering = egl.eglGetCurrentContext() != egl.EGL_NO_CONTEXT
+        except:
+            from .gl_utils import eglctx
+            self.offline_rendering = eglctx is not None
 
         self.compile_shaders()
         self.use_gl_program(self.gsplat_program)
@@ -89,6 +97,22 @@ class GSplatContextManager:
         P = mat4(*P.tolist())
         V = raster_settings.viewmatrix.detach().cpu().numpy()  # 4,4 # MARK: possible sync
         V = mat4(*V.tolist())
+
+        if not self.offline_rendering:
+            K = P * glm.affineInverse(V)
+
+            gl_c2w = glm.affineInverse(V)
+            gl_c2w[0] *= 1  # do notflip x
+            gl_c2w[1] *= -1  # flip y
+            gl_c2w[2] *= -1  # flip z
+            V = glm.affineInverse(gl_c2w)
+
+            K[2][0] *= -1
+            K[2][2] *= -1
+            K[2][3] *= -1
+
+            P = K * V
+
         M = glm.identity(mat4)
         VM = V * M
 
@@ -200,6 +224,7 @@ class GSplatContextManager:
     def render(self, xyz3: torch.Tensor, cov6: torch.Tensor, rgb3: torch.Tensor, occ1: torch.Tensor, raster_settings: 'GaussianRasterizationSettings'):
         H, W = raster_settings.image_height, raster_settings.image_width
         self.resize_textures(H, W)
+        self.resize_buffers(len(xyz3))
 
         # Compute GS
         data = torch.cat([xyz3, cov6, rgb3, occ1], dim=-1)
@@ -217,15 +242,6 @@ class GSplatContextManager:
         CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
         cu_vbo_ptr, cu_vbo_size = CHECK_CUDART_ERROR(cudart.cudaGraphicsResourceGetMappedPointer(self.cu_vbo))
 
-        if cu_vbo_size < data.numel() * data.element_size():
-            CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
-
-            size = int(len(idx) * 1.05)
-            self.init_gl_buffers(size)
-
-            CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
-            cu_vbo_ptr, cu_vbo_size = CHECK_CUDART_ERROR(cudart.cudaGraphicsResourceGetMappedPointer(self.cu_vbo))
-
         CHECK_CUDART_ERROR(cudart.cudaMemcpyAsync(cu_vbo_ptr,
                                                   data.data_ptr(),
                                                   data.numel() * data.element_size(),
@@ -233,49 +249,50 @@ class GSplatContextManager:
                                                   torch.cuda.current_stream().cuda_stream))
         CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
 
-        # Perform actual rendering
+        if self.offline_rendering:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)  # for offscreen rendering to textures
+            gl.glClearColor(0, 0, 0, 1.)
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+
         self.use_gl_program(self.gsplat_program)
         self.upload_gl_uniforms(raster_settings)
         x, y, w, h = gl.glGetIntegerv(gl.GL_VIEWPORT)
         gl.glViewport(0, 0, W, H)
         gl.glScissor(0, 0, W, H)  # only render in this small region of the viewport
-
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)  # for offscreen rendering to textures
-        gl.glClearColor(0, 0, 0, 1.)
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-
         gl.glBindVertexArray(self.vao)
         gl.glDrawArrays(gl.GL_POINTS, 0, len(idx))  # number of vertices
         gl.glBindVertexArray(0)
-
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
-
         gl.glViewport(x, y, w, h)
         gl.glScissor(x, y, w, h)
 
-        # Copy rendered image and depth back as tensor
-        cu_tex = self.cu_tex
+        # Prepare the output
+        if self.offline_rendering:
+            rgba_map = torch.empty((H, W, 4), dtype=self.tex_dtype, device='cuda')  # to hold the data from opengl
+            # Texture access and copy could be very slow...
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
-        # Prepare the output # !: BATCH
-        rgba_map = torch.empty((H, W, 4), dtype=self.tex_dtype, device='cuda')  # to hold the data from opengl
+            # Copy rendered image and depth back as tensor
+            cu_tex = self.cu_tex
 
-        # The resources in resources may be accessed by CUDA until they are unmapped.
-        # The graphics API from which resources were registered should not access any resources while they are mapped by CUDA.
-        # If an application does so, the results are undefined.
-        CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))
-        cu_tex_arr = CHECK_CUDART_ERROR(cudart.cudaGraphicsSubResourceGetMappedArray(cu_tex, 0, 0))
-        CHECK_CUDART_ERROR(cudart.cudaMemcpy2DFromArrayAsync(rgba_map.data_ptr(),  # dst
-                                                             W * 4 * rgba_map.element_size(),  # dpitch
-                                                             cu_tex_arr,  # src
-                                                             0,  # wOffset
-                                                             0,  # hOffset
-                                                             W * 4 * rgba_map.element_size(),  # width Width of matrix transfer (columns in bytes)
-                                                             H,  # height
-                                                             kind,  # kind
-                                                             torch.cuda.current_stream().cuda_stream))  # stream
-        CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))
+            # The resources in resources may be accessed by CUDA until they are unmapped.
+            # The graphics API from which resources were registered should not access any resources while they are mapped by CUDA.
+            # If an application does so, the results are undefined.
+            CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))
+            cu_tex_arr = CHECK_CUDART_ERROR(cudart.cudaGraphicsSubResourceGetMappedArray(cu_tex, 0, 0))
+            CHECK_CUDART_ERROR(cudart.cudaMemcpy2DFromArrayAsync(rgba_map.data_ptr(),  # dst
+                                                                 W * 4 * rgba_map.element_size(),  # dpitch
+                                                                 cu_tex_arr,  # src
+                                                                 0,  # wOffset
+                                                                 0,  # hOffset
+                                                                 W * 4 * rgba_map.element_size(),  # width Width of matrix transfer (columns in bytes)
+                                                                 H,  # height
+                                                                 kind,  # kind
+                                                                 torch.cuda.current_stream().cuda_stream))  # stream
+            CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))
 
-        return rgba_map  # H, W, 4
+            return rgba_map  # H, W, 4
+        else:
+            return None
 
     def rasterize_gaussians(
         self,
@@ -300,8 +317,12 @@ class GSplatContextManager:
             colors_precomp = (colors_precomp + 0.5).clip(0, 1)
 
         rgba_map = self.render(means3D, cov3D_precomp, colors_precomp, opacities, raster_settings)
-        image, alpha = rgba_map.split([3, 1], dim=-1)
-        image, alpha = image.permute(2, 0, 1), alpha.permute(2, 0, 1)
 
-        # FIXME: Alpha channel seems to be bugged
-        return image.float(), torch.ones_like(alpha).float()
+        if self.offline_rendering:
+            image, alpha = rgba_map.split([3, 1], dim=-1)
+            image, alpha = image.permute(2, 0, 1), alpha.permute(2, 0, 1)
+
+            # FIXME: Alpha channel seems to be bugged
+            return image.float(), torch.ones_like(alpha).float()
+        else:
+            return None, None

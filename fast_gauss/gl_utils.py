@@ -17,6 +17,9 @@ if 'OpenGL' not in sys.modules:
     except Exception as e:
         log(yellow(f'Could not import EGL related modules. {type(e).__name__}: {e}'))
         os.environ['PYOPENGL_PLATFORM'] = ''
+        eglctx = None
+else:
+    eglctx = None
 
 def is_wsl2():
     """Returns True if the current environment is WSL2, False otherwise."""

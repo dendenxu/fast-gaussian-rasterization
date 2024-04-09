@@ -41,7 +41,14 @@ from ctypes import pointer, util
 
 if 'CUDA_VISIBLE_DEVICES' in os.environ:
     CUDA_VISIBLE_DEVICES = list(map(int, [i for i in os.environ['CUDA_VISIBLE_DEVICES'].split(',') if i]))  # remove ''
-    from easyvolcap.utils.dist_utils import get_rank
+    import torch.distributed as dist
+
+    def get_rank() -> int:
+        if not dist.is_available():
+            return 0
+        if not dist.is_initialized():
+            return 0
+        return dist.get_rank()
     # os.environ['EGL_DEVICE_ID'] = str(CUDA_VISIBLE_DEVICES[get_rank()])  # TODO: debug this and figure out what `torchrun` does behind the curtain
     os.environ['EGL_DEVICE_ID'] = str(get_rank())
 
