@@ -46,7 +46,7 @@ It's also recommended to pass in a CPU tensor in the GaussianRasterizationSettin
 
 **Note: for the ultimate 5-10x performance increase, you'll need to let `fast_gauss`'s shader directly write to your desired framebuffer.**
 
-Currently, we will try to automatically detect whether you're managing your own OpenGL context (i.e. opening up a GUI) by checking for the `OpenGL` during the import of `fast_gauss`.
+Currently, we are trying to automatically detect whether you're managing your own OpenGL context (i.e. opening up a GUI) by checking for the `OpenGL` during the import of `fast_gauss`.
 
 If detected, all rendering command will return `None`s and we will directly write to the bound framebuffer at the time of the draw call.
 
@@ -54,7 +54,7 @@ If detected, all rendering command will return `None`s and we will directly writ
 
 ## TODOs
 
-- [ ] TODO: Thinks of ways for backward pass
+- [ ] TODO: Thinks of ways for backward pass. Welcome to discuss!
 - [ ] TODO: Compute covariance from scaling and rotation in the shader, currently it's on the CUDA side.
 - [ ] TODO: Compute SH in the shader, currently it's on the CUDA side.
 
