@@ -27,16 +27,16 @@ class GaussianRasterizer:
         super().__init__()
         self.raster_settings = raster_settings
 
-    def forward(self,
-                means3D: torch.Tensor,
-                means2D: torch.Tensor,  # only to match the api, can be none, not used
-                opacities: torch.Tensor,
-                shs: torch.Tensor = None,
-                colors_precomp: torch.Tensor = None,
-                scales: torch.Tensor = None,
-                rotations: torch.Tensor = None,
-                cov3D_precomp: torch.Tensor = None
-                ):
+    def __call__(self,
+                 means3D: torch.Tensor,
+                 means2D: torch.Tensor,  # only to match the api, can be none, not used
+                 opacities: torch.Tensor,
+                 shs: torch.Tensor = None,
+                 colors_precomp: torch.Tensor = None,
+                 scales: torch.Tensor = None,
+                 rotations: torch.Tensor = None,
+                 cov3D_precomp: torch.Tensor = None
+                 ):
 
         raster_settings = self.raster_settings
 

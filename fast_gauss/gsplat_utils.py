@@ -33,11 +33,13 @@ class GSplatContextManager:
                  init_buffer_size: int = 32768,
                  init_texture_size: List[int] = [512, 512],
                  dtype: str = torch.float,  # +5-10 fps on 3060, not working too well with flame_salmon
+                 tex_dtype: str = torch.float,  # +5-10 fps on 3060, not working too well with flame_salmon
                  ):
-        self.vert_sizes = [3, 3, 3, 4]  # verts, cov6, rgba4
+        self.attr_sizes = [3, 3, 3, 4]  # verts, cov6, rgba4
         self.dtype = getattr(torch, dtype) if isinstance(dtype, str) else dtype
-        self.tex_dtype = self.dtype
-        self.vert_gl_types = [gl.GL_FLOAT if self.dtype == torch.float else gl.GL_HALF_FLOAT] * len(self.vert_sizes)  # TODO: maybe use half here
+        self.tex_dtype = getattr(torch, tex_dtype) if isinstance(tex_dtype, str) else tex_dtype
+        self.gl_tex_dtype = gl.GL_RGBA16F if self.tex_dtype == torch.half else gl.GL_RGBA32F
+        self.gl_attr_dtypes = [gl.GL_FLOAT if self.dtype == torch.float else gl.GL_HALF_FLOAT] * len(self.attr_sizes)  # TODO: maybe use half here
         self.uniforms = dotdict()  # uniform values
 
         self.compile_shaders()
@@ -53,6 +55,9 @@ class GSplatContextManager:
         # Performs z-buffer testing
         gl.glDisable(gl.GL_DEPTH_TEST)
         gl.glDisable(gl.GL_ALPHA_TEST)
+
+        # Enable some masking tests
+        gl.glEnable(gl.GL_SCISSOR_TEST)
 
         # Enable blending for final rendering
         gl.glEnable(gl.GL_BLEND)
@@ -71,7 +76,7 @@ class GSplatContextManager:
 
     def use_gl_program(self, program: shaders.ShaderProgram):
         use_gl_program(program)
-        self.uniforms.K = gl.glGetUniformLocation(program, "K")
+        self.uniforms.P = gl.glGetUniformLocation(program, "P")
         self.uniforms.VM = gl.glGetUniformLocation(program, "VM")
         self.uniforms.focal = gl.glGetUniformLocation(program, "focal")
         self.uniforms.basisViewport = gl.glGetUniformLocation(program, "basisViewport")
@@ -95,15 +100,15 @@ class GSplatContextManager:
         gl.glUniform2f(self.uniforms.focal, fx * 0.5 * raster_settings.image_width, fy * 0.5 * raster_settings.image_height)  # focal in pixel space
         gl.glUniform2f(self.uniforms.basisViewport, 1 / raster_settings.image_width, 1 / raster_settings.image_height)  # focal
 
-    def init_gl_buffers(self, v: int = 0, f: int = 0):
+    def init_gl_buffers(self, v: int = 0):
         from cuda import cudart
         if hasattr(self, 'cu_vbo'):
             CHECK_CUDART_ERROR(cudart.cudaGraphicsUnregisterResource(self.cu_vbo))
 
-        element_size = 4 if self.vert_gl_types[0] == gl.GL_FLOAT else 2
-
         # This will only init the corresponding buffer object
-        n_verts_bytes = v * self.vert_size * element_size if v > 0 else self.n_verts_bytes
+        element_size = 4 if self.gl_attr_dtypes[0] == gl.GL_FLOAT else 2
+        attr_size = sum(self.attr_sizes)
+        n_verts_bytes = v * attr_size * element_size
 
         # Housekeeping
         if hasattr(self, 'vao'):
@@ -120,8 +125,8 @@ class GSplatContextManager:
 
         # https://stackoverflow.com/questions/67195932/pyopengl-cannot-render-any-vao
         cumsum = 0
-        for i, (s, t) in enumerate(zip(self.vert_sizes, self.vert_gl_types)):
-            gl.glVertexAttribPointer(i, s, t, gl.GL_FALSE, self.vert_size * element_size, ctypes.c_void_p(cumsum * element_size))  # we use 32 bit float
+        for i, (s, t) in enumerate(zip(self.attr_sizes, self.gl_attr_dtypes)):
+            gl.glVertexAttribPointer(i, s, t, gl.GL_FALSE, attr_size * element_size, ctypes.c_void_p(cumsum * element_size))  # we use 32 bit float
             gl.glEnableVertexAttribArray(i)
             cumsum += s
         # Register vertex buffer obejct
@@ -176,31 +181,27 @@ class GSplatContextManager:
         # Restore the original state
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
-        log(f'Created texture of h, w: {self.max_H}, {self.max_W}')
-
         # Register image to read from
         flags = cudart.cudaGraphicsRegisterFlags.cudaGraphicsRegisterFlagsReadOnly
         self.cu_tex = CHECK_CUDART_ERROR(cudart.cudaGraphicsGLRegisterImage(self.tex_rgba, gl.GL_TEXTURE_2D, flags))
 
     def resize_textures(self, H: int, W: int):  # analogy to update_gl_buffers
-        if not hasattr(self, 'max_H'): self.max_H = H
-        if not hasattr(self, 'max_W'): self.max_W = W
+        if not hasattr(self, 'max_H'): self.max_H = 0
+        if not hasattr(self, 'max_W'): self.max_W = 0
         if H > self.max_H or W > self.max_W:  # max got updated
-            if H > self.max_H: self.max_H = H * 1.05
-            if W > self.max_W: self.max_W = W * 1.05
+            if H > self.max_H: self.max_H = int(H * 1.05)
+            if W > self.max_W: self.max_W = int(W * 1.05)
             self.init_textures(self.max_H, self.max_W)
 
-    def resize_buffers(self, v: int = 0, f: int = 0):
-        if not hasattr(self, 'max_verts'): self.max_verts = v
-        if not hasattr(self, 'max_faces'): self.max_faces = f
-        if v > self.max_verts or f > self.max_faces:
-            if v > self.max_verts: self.max_verts = v * 1.05
-            if f > self.max_faces: self.max_faces = f * 1.05
-            self.init_gl_buffers(self.max_verts, self.max_faces)
+    def resize_buffers(self, v: int = 0):
+        if not hasattr(self, 'max_verts'): self.max_verts = 0
+        if v > self.max_verts:
+            if v > self.max_verts: self.max_verts = int(v * 1.05)
+            self.init_gl_buffers(self.max_verts)
 
     @torch.no_grad()
     def render(self, xyz3: torch.Tensor, cov6: torch.Tensor, rgb3: torch.Tensor, occ1: torch.Tensor, raster_settings: 'GaussianRasterizationSettings'):
-        H, W = raster_settings.image_height, raster_settings.image_height
+        H, W = raster_settings.image_height, raster_settings.image_width
         self.resize_textures(H, W)
 
         # Compute GS
@@ -223,7 +224,6 @@ class GSplatContextManager:
             CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
 
             size = int(len(idx) * 1.05)
-            log(yellow_slim(f'[FDGS] Resize OpenGL buffer to: {size}'))
             self.init_gl_buffers(size)
 
             CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
@@ -238,33 +238,40 @@ class GSplatContextManager:
 
         # Perform actual rendering
         self.upload_gl_uniforms(raster_settings)
+        x, y, w, h = gl.glGetIntegerv(gl.GL_VIEWPORT)
+        gl.glViewport(0, 0, W, H)
+        gl.glScissor(0, 0, W, H)  # only render in this small region of the viewport
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)  # for offscreen rendering to textures
         gl.glBindVertexArray(self.vao)
         gl.glDrawArrays(gl.GL_POINTS, 0, len(idx))  # number of vertices
         gl.glBindVertexArray(0)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+        gl.glViewport(x, y, w, h)
+        gl.glScissor(x, y, w, h)
 
         # Copy rendered image and depth back as tensor
         cu_tex = self.cu_tex
 
         # Prepare the output # !: BATCH
-        rgb_map = torch.empty((H, W, 4), dtype=self.tex_dtype, device='cuda')  # to hold the data from opengl
+        rgba_map = torch.empty((H, W, 4), dtype=self.tex_dtype, device='cuda')  # to hold the data from opengl
 
         # The resources in resources may be accessed by CUDA until they are unmapped.
         # The graphics API from which resources were registered should not access any resources while they are mapped by CUDA.
         # If an application does so, the results are undefined.
         CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))
         cu_tex_arr = CHECK_CUDART_ERROR(cudart.cudaGraphicsSubResourceGetMappedArray(cu_tex, 0, 0))
-        CHECK_CUDART_ERROR(cudart.cudaMemcpy2DFromArrayAsync(rgb_map.data_ptr(),  # dst
-                                                             W * 4 * rgb_map.element_size(),  # dpitch
+        CHECK_CUDART_ERROR(cudart.cudaMemcpy2DFromArrayAsync(rgba_map.data_ptr(),  # dst
+                                                             W * 4 * rgba_map.element_size(),  # dpitch
                                                              cu_tex_arr,  # src
                                                              0,  # wOffset
                                                              0,  # hOffset
-                                                             W * 4 * rgb_map.element_size(),  # width Width of matrix transfer (columns in bytes)
+                                                             W * 4 * rgba_map.element_size(),  # width Width of matrix transfer (columns in bytes)
                                                              H,  # height
                                                              kind,  # kind
                                                              torch.cuda.current_stream().cuda_stream))  # stream
         CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))  # MARK: SYNC
 
-        return rgb_map  # H, W, 4
+        return rgba_map  # H, W, 4
 
     def rasterize_gaussians(
         self,
@@ -287,6 +294,7 @@ class GSplatContextManager:
             dirs = normalize(means3D - C)
             colors_precomp = eval_sh(raster_settings.sh_degree, shs.mT, dirs)
 
-        rgb_map = self.render(means3D, cov3D_precomp, colors_precomp, opacities, raster_settings)
-        image, alpha = rgb_map.split([3, 1], dim=-1)
-        return image.permute(1, 2, 0), alpha.permute(1, 2, 0)
+        rgba_map = self.render(means3D, cov3D_precomp, colors_precomp, opacities, raster_settings)
+        image, alpha = rgba_map.split([3, 1], dim=-1)
+        image, alpha = image.permute(2, 0, 1), alpha.permute(2, 0, 1)
+        return image, alpha
