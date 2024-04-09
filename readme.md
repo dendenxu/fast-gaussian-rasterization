@@ -12,15 +12,7 @@ Depth-peeling ([4K4D](https://zju3dv.github.io/4k4d)) too slow.
 No CUDA compilation required.
 
 ```shell
-git clone https://github.com/dendenxu/fast-gaussian-splatting
-cd fast-gaussian-splatting
-pip install .
-```
-
-or
-
-```shell
-pip install git+https://github.com/dendenxu/fast-gaussian-splatting
+pip install fast_gauss
 ```
 
 ## Usage
