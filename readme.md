@@ -1,6 +1,7 @@
 # Fast Gaussian Splatting
 
-**5-10x faster rendering than the original software CUDA rasterizer ([diff-gaussian-rasterization](https://github.com/graphdeco-inria/diff-gaussian-rasterization)).**
+- **5-10x faster rendering than the original software CUDA rasterizer ([diff-gaussian-rasterization](https://github.com/graphdeco-inria/diff-gaussian-rasterization)).**
+- **2-3x faster if you using offline rendering. (Bottleneck: copying rendered images around, thinking about improvements.)**
 
 No backward pass supported yet. 
 Will think of ways to add a backward. 
@@ -40,12 +41,20 @@ from fast_gauss import GaussianRasterizationSettings, GaussianRasterizer
 
 And you're good to go.
 
+## Tips
+
 Note that the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for backward), but the alpha values of the rendered image instead.
 And the alpha channel content seems to be bugged for now, will debug.
 
 - [ ] TODO: Debug alpha channel
 
 It's also recommended to pass in a CPU tensor in the GaussianRasterizationSettings to avoid explicit synchronizations for even better performance.
+
+**Note: for the ultimate 5-10x performance increase, you'll need to let `fast_gauss`'s shader directly write to your desired framebuffer.**
+
+Currently we will try to automatically detect whether you're managing your own OpenGL context (i.e. opening up a GUI) by checking for the `OpenGL` during import of `fast_gauss`.
+
+If detected, all rendering command will return `None`s and we will directly write to the bound framebuffer at the time of the draw call.
 
 ## TODOs
 
