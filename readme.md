@@ -25,7 +25,7 @@ Latest commit from GitHub:
 pip install git+https://github.com/dendenxu/fast-gaussian-rasterization
 ```
 
-No CUDA compilation is required to build `fast_gauss` since we're shader-based for now.
+No CUDA compilation is required to build `fast_gauss` since we're only shader-based for now.
 
 ## Usage
 
@@ -58,6 +58,7 @@ Thus if you're running in a GUI (OpenGL-based) environment, the output of our ra
 - [ ] TODO: Improve offline rendering performance.
 - [ ] TODO: Add a warning to the user if they're performing further processing on the returned values.
 
+
 **Note: the speedup is mostly visible when the pixel-to-point ratio is high.**
 
 That is, when there're large gaussians and very high resolution rendering, the speedup is more visible.
@@ -66,9 +67,11 @@ The CUDA-based software implementation is more resolution sensitive and for some
 
 This is because the typical rasterization-based pipeline on modern graphics are [not well-optimized for small triangles](https://www.youtube.com/watch?v=hf27qsQPRLQ&list=WL).
 
+
 **Note: it's recommended to pass in a CPU tensor in the GaussianRasterizationSettings to avoid explicit synchronizations for even better performance.**
 
 - [ ] TODO: Add a warning to the user if GPU tensors are detected.
+
 
 **Note: the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for the backward pass), but the alpha values of the rendered image instead.**
 
@@ -76,12 +79,13 @@ And the alpha channel content seems to be bugged currently, will debug.
 
 - [ ] TODO: Debug alpha channel
 
+
 ## TODOs
 
 - [ ] TODO: Apply more of the optimization techniques used by similar shaders, including packing the data into a texture and bit reduction during computation.
 - [ ] TODO: Thinks of ways for a backward pass. Welcome to discuss!
-- [ ] TODO: Compute covariance from scaling and rotation in the shader, currently it's on the CUDA side.
-- [ ] TODO: Compute SH in the shader, currently it's on the CUDA side.
+- [ ] TODO: Compute covariance from scaling and rotation in the shader, currently it's on the CUDA (PyTorch) side.
+- [ ] TODO: Compute SH in the shader, currently it's on the CUDA (PyTorch) side.
 
 ## Environment
 
