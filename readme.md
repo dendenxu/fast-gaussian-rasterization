@@ -3,13 +3,15 @@
 - **5-10x faster rendering than the original software CUDA rasterizer ([diff-gaussian-rasterization](https://github.com/graphdeco-inria/diff-gaussian-rasterization)).**
 - **2-3x faster if using offline rendering. (Bottleneck: copying rendered images around, thinking about improvements.)**
 
-No backward pass supported yet. 
+https://github.com/dendenxu/fast-gaussian-splatting/assets/43734697/f50afd6f-bbd5-4e18-aca6-a7356a5d3f75
+
+No backward pass is supported yet. 
 Will think of ways to add a backward. 
-Depth-peeling ([4K4D](https://zju3dv.github.io/4k4d)) too slow.
+Depth-peeling ([4K4D](https://zju3dv.github.io/4k4d)) is too slow.
 
 ## Installation
 
-No CUDA compilation required.
+No CUDA compilation is required.
 
 ```shell
 git clone https://github.com/dendenxu/fast-gaussian-splatting
@@ -43,8 +45,8 @@ And you're good to go.
 
 ## Tips
 
-Note that the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for backward), but the alpha values of the rendered image instead.
-And the alpha channel content seems to be bugged for now, will debug.
+Note that the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for the backward pass), but the alpha values of the rendered image instead.
+And the alpha channel content seems to be bugged currently, will debug.
 
 - [ ] TODO: Debug alpha channel
 
@@ -52,7 +54,7 @@ It's also recommended to pass in a CPU tensor in the GaussianRasterizationSettin
 
 **Note: for the ultimate 5-10x performance increase, you'll need to let `fast_gauss`'s shader directly write to your desired framebuffer.**
 
-Currently we will try to automatically detect whether you're managing your own OpenGL context (i.e. opening up a GUI) by checking for the `OpenGL` during import of `fast_gauss`.
+Currently, we will try to automatically detect whether you're managing your own OpenGL context (i.e. opening up a GUI) by checking for the `OpenGL` during the import of `fast_gauss`.
 
 If detected, all rendering command will return `None`s and we will directly write to the bound framebuffer at the time of the draw call.
 
@@ -61,22 +63,22 @@ If detected, all rendering command will return `None`s and we will directly writ
 ## TODOs
 
 - [ ] TODO: Thinks of ways for backward pass
-- [ ] TODO: Compute covariance from scaling and rotation in the shader, currently it's on the CUDA-side.
-- [ ] TODO: Compute SH in the shader, currently it's on the CUDA-side.
+- [ ] TODO: Compute covariance from scaling and rotation in the shader, currently it's on the CUDA side.
+- [ ] TODO: Compute SH in the shader, currently it's on the CUDA side.
 
 ## Environment
 
-This project requires you to have an NVIDIA gpu with the ability to interop between CUDA and OpenGL.
+This project requires you to have an NVIDIA GPU with the ability to interop between CUDA and OpenGL.
 Thus, WSL is [not supported](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#features-not-yet-supported) and OSX (MacOS) is not supported.
 
-For offline rendering (the drop in replacement of the original CUDA rasterizer), we also need a valid EGL environment.
-It can sometimes be hard to setup for virtualized machines. [Potential fix](https://github.com/zju3dv/4K4D/issues/27#issuecomment-2026747401).
+For offline rendering (the drop-in replacement of the original CUDA rasterizer), we also need a valid EGL environment.
+It can sometimes be hard to set up for virtualized machines. [Potential fix](https://github.com/zju3dv/4K4D/issues/27#issuecomment-2026747401).
 
 - [ ] TODO: Test on more platforms.
 
 ## Credits
 
-Inspired by those insanely fast WebGL-based 3DGS viewer:
+Inspired by those insanely fast WebGL-based 3DGS viewers:
 
 - [GaussianSplats3D](https://github.com/mkkellogg/GaussianSplats3D) for inspiring our vertex-geometry-fragment shader pipeline.
 - [gsplat.tech](https://gsplat.tech/).
@@ -84,7 +86,7 @@ Inspired by those insanely fast WebGL-based 3DGS viewer:
 
 Using the algorithm and improvements from:
 
-- [diff-gaussian-rasterization](https://github.com/graphdeco-inria/diff-gaussian-rasterization) for the main gaussian splatting algorithm.
+- [diff-gaussian-rasterization](https://github.com/graphdeco-inria/diff-gaussian-rasterization) for the main Gaussian Splatting algorithm.
 - [diff_gauss](https://github.com/dendenxu/diff-gaussian-rasterization) for the fixed culling.
 
 CUDA-GL interop & EGL environment inspired by:
