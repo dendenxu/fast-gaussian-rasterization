@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fast_gauss"
-version = "0.0.1"
+version = "0.0.2"
 description = "CUDA global sort + CUDA-GL interop + geometry shader quad emitting + hardware rasterization + CUDA-GL interop = fast gaussian splatting"
 readme = "readme.md"
 license = { file = "license" }
