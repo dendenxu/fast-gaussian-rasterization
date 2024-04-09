@@ -8,6 +8,7 @@ https://github.com/dendenxu/fast-gaussian-splatting/assets/43734697/f50afd6f-bbd
 No backward pass is supported yet. 
 Will think of ways to add a backward. 
 Depth-peeling ([4K4D](https://zju3dv.github.io/4k4d)) is too slow.
+Discussion welcomed.
 
 ## Installation
 
@@ -37,24 +38,29 @@ And you're good to go.
 
 ## Tips
 
-Note that the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for the backward pass), but the alpha values of the rendered image instead.
+**Note: for the ultimate 5-10x performance increase, you'll need to let `fast_gauss`'s shader directly write to your desired framebuffer.**
+
+Currently, we are trying to automatically detect whether you're managing your own OpenGL context (i.e. opening up a GUI) by checking for the module `OpenGL` during the import of `fast_gauss`.
+
+If detected, all rendering command will return `None`s and we will directly write to the bound framebuffer at the time of the draw call.
+
+Thus if you're running in a GUI (OpenGL-based) environment, the output of our rasterizer will be `None`s and does not require further processing.
+
+- [ ] TODO: Improve offline rendering performance.
+- [ ] TODO: Add a warning to the user if they're performing further processing on the returned values.
+
+Note: it's recommended to pass in a CPU tensor in the GaussianRasterizationSettings to avoid explicit synchronizations for even better performance.
+
+- [ ] TODO: Add a warning to the user if GPU tensors are detected.
+
+Note: the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for the backward pass), but the alpha values of the rendered image instead.
 And the alpha channel content seems to be bugged currently, will debug.
 
 - [ ] TODO: Debug alpha channel
 
-It's also recommended to pass in a CPU tensor in the GaussianRasterizationSettings to avoid explicit synchronizations for even better performance.
-
-**Note: for the ultimate 5-10x performance increase, you'll need to let `fast_gauss`'s shader directly write to your desired framebuffer.**
-
-Currently, we are trying to automatically detect whether you're managing your own OpenGL context (i.e. opening up a GUI) by checking for the `OpenGL` during the import of `fast_gauss`.
-
-If detected, all rendering command will return `None`s and we will directly write to the bound framebuffer at the time of the draw call.
-
-- [ ] TODO: Improve offline rendering performance.
-
 ## TODOs
 
-- [ ] TODO: Thinks of ways for backward pass. Welcome to discuss!
+- [ ] TODO: Thinks of ways for a backward pass. Welcome to discuss!
 - [ ] TODO: Compute covariance from scaling and rotation in the shader, currently it's on the CUDA side.
 - [ ] TODO: Compute SH in the shader, currently it's on the CUDA side.
 
