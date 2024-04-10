@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fast_gauss"
 version = "0.0.5"
-description = "CUDA global sort + CUDA-GL interop + geometry shader quad emitting + hardware rasterization + CUDA-GL interop = fast gaussian splatting"
+description = "A geometry-shader-based, global CUDA sorted high-performance 3D Gaussian Splatting rasterizer. Can achieve a 5-10x speedup in rendering compared to the vanialla diff-gaussian-rasterization."
 readme = "readme.md"
 license = { file = "license" }
 authors = [{ email = "zhenx@zju.edu.cn" }, { name = "Zhen Xu" }]
