@@ -50,28 +50,21 @@ And you're good to go.
 **Note: for the ultimate 5-10x performance increase, you'll need to let `fast_gauss`'s shader directly write to your desired framebuffer.**
 
 Currently, we are trying to automatically detect whether you're managing your own OpenGL context (i.e. opening up a GUI) by checking for the module `OpenGL` during the import of `fast_gauss`.
-
-If detected, all rendering command will return `None`s and we will directly write to the bound framebuffer at the time of the draw call.
-
+If detected, all rendering commands will return `None`s and we will directly write to the bound framebuffer at the time of the draw call.
 Thus if you're running in a GUI (OpenGL-based) environment, the output of our rasterizer will be `None`s and does not require further processing.
 
 - [ ] TODO: Improve offline rendering performance.
 - [ ] TODO: Add a warning to the user if they're performing further processing on the returned values.
 
-
 **Note: the speedup is the most visible when the pixel-to-point ratio is high.**
 
 That is, when there are large Gaussians and very high-resolution rendering, the speedup is more visible.
-
 The CUDA-based software implementation is more resolution sensitive and for some extremely dense point clouds (> 1 million points), the CUDA implementation might be faster.
-
 This is because the typical rasterization-based pipeline on modern graphics hardware is [not well-optimized for small triangles](https://www.youtube.com/watch?v=hf27qsQPRLQ&list=WL).
-
 
 **Note: for best performance, cache the persistent results (for example, the 6 elements of the covariance matrix).**
 
 This is more of a general tip and not directly related to `fast_gauss`.
-
 However, the impact is more observable here since we haven't implemented a fast 3D covariance computation (from scales and rotations) in the shader yet.
 Only PyTorch implementation is available for now.
 
@@ -83,11 +76,9 @@ Thus, store the concatenated tensors instead and avoid concatenating them in eve
 - [ ] TODO: Warn users if they're not properly precomputing the covariance matrix.
 - [ ] TODO: Implement a more optimized `OptimizedGaussians` for precomputing things and apply a cache. Similar to that of the vertex shader (see [Invokation frequency](https://www.khronos.org/opengl/wiki/Vertex_Shader)).
 
-
 **Note: it's recommended to pass in a CPU tensor in the `GaussianRasterizationSettings` to avoid explicit synchronizations for even better performance.**
 
 - [ ] TODO: Add a warning to the user if GPU tensors are detected.
-
 
 **Note: the second output of the `GaussianRasterizer` is not radii anymore (since we're not gonna use it for the backward pass), but the alpha values of the rendered image instead.**
 
@@ -107,7 +98,7 @@ And the alpha channel content seems to be bugged currently, will debug.
 
 ## Implementation
 
-**Goal:**
+**Guidelines**
 
 - Let the professionals do the work.
   - Let GPU do the large-scale sorting.
@@ -118,6 +109,15 @@ And the alpha channel content seems to be bugged currently, will debug.
 - Minimize stalls (minimize explicit synchronizations between GPU and CPU).
   - Enabled by using `non_blocking=True` data passing and moving sync points to as early as possible.
   - Boosted by the fact that we're sorting on the GPU, thus no need to perform synchronized host-to-device copies.
+
+**Why does a global sort work?**
+
+The OpenGL specification is somewhat vague but there's this reference:
+(in the 4th paragraph of section 2.1 of chapter 2 of this specification: https://registry.khronos.org/OpenGL/specs/gl/glspec44.core.pdf)
+
+> Commands are always processed in the order in which they are received, although there may be an indeterminate delay before the effects of a command are realized. This means, for example, that one primitive must be drawn completely before any subsequent one can affect the framebuffer.
+
+Thus if the order of the data in the vertex buffer (or as specified by an index buffer) is back-to-front, and alpha blending is enabled, you can count on OpenGL to correctly update the framebuffer in the correct back to front order.
 
 - [ ] TODO: Expand implementation details.
 
