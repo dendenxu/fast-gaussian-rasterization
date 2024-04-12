@@ -80,7 +80,7 @@ from rich.pretty import Pretty, pretty_repr, pprint
 from rich.progress import BarColumn, TimeElapsedColumn, TimeRemainingColumn, filesize, ProgressColumn
 from tqdm.std import tqdm as std_tqdm
 from tqdm.rich import tqdm_rich, FractionColumn, RateColumn
-from easyvolcap.utils.base_utils import default_dotdict, dotdict, DoNothing
+from .base_utils import default_dotdict, dotdict, DoNothing
 
 pdbr_theme = 'ansi_dark'
 pdbr.utils.set_traceback(pdbr_theme)
@@ -787,3 +787,11 @@ def build_parser(d: dict, parser: argparse.ArgumentParser = None, **kwargs):
             parser.add_argument(f'--{k}', type=type(v), default=v, help=markup_to_ansi(help_pattern.format(v)))
 
     return parser
+
+
+def warn_once(message: str):
+    if not hasattr(warn_once, 'warned'):
+        warn_once.warned = set()
+    if message not in warn_once.warned:
+        log(yellow(message))
+        warn_once.warned.add(message)

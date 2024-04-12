@@ -54,6 +54,13 @@ class GSplatContextManager:
         self.resize_buffers(init_buffer_size)
         self.resize_textures(*init_texture_size)
 
+        log(green_slim(f'GSplatContextManager initialized with attribute dtype: {self.dtype}, texture dtype: {self.tex_dtype}, offline rendering: {self.offline_rendering}, buffer size: {init_buffer_size}, texture size: {init_texture_size}'))
+
+        if not self.offline_rendering:
+            log(green_slim('Using online rendering mode, in this mode, calling the rendering function of fast_gauss will write directly to the currently bound framebuffer'))
+            log(green_slim('In this mode, the output of all rasterization calls will be None (same output count). Please do not perform further processing on them.'))
+            log(green_slim('Please make sure to set up the correct GUI environment before calling the rasterization function, see more in readme.md'))
+
     def opengl_options(self):
         # Performs face culling
         gl.glDisable(gl.GL_CULL_FACE)
@@ -220,6 +227,13 @@ class GSplatContextManager:
 
     @torch.no_grad()
     def render(self, xyz3: torch.Tensor, cov6: torch.Tensor, rgb3: torch.Tensor, occ1: torch.Tensor, raster_settings: 'GaussianRasterizationSettings'):
+        if xyz3.dtype != self.dtype:
+            warn_once(yellow(f'Input tensors has dtype {xyz3.dtype}, expected {self.dtype}, will cast to {self.dtype}'))
+            xyz3, cov6, rgb3, occ1 = xyz3.to(self.dtype), cov6.to(self.dtype), rgb3.to(self.dtype), occ1.to(self.dtype)
+            for key in raster_settings:
+                if isinstance(raster_settings[key], torch.Tensor):
+                    raster_settings[key] = raster_settings[key].to(self.dtype)
+
         # Prepare OpenGL texture size
         H, W = raster_settings.image_height, raster_settings.image_width
         self.resize_textures(H, W)
@@ -237,7 +251,7 @@ class GSplatContextManager:
 
         # Upload sorted data to OpenGL for rendering
         from cuda import cudart
-        from easyvolcap.utils.cuda_utils import CHECK_CUDART_ERROR, FORMAT_CUDART_ERROR
+        from .cuda_utils import CHECK_CUDART_ERROR, FORMAT_CUDART_ERROR
         kind = cudart.cudaMemcpyKind.cudaMemcpyDeviceToDevice
 
         CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
@@ -292,6 +306,10 @@ class GSplatContextManager:
                                                                  kind,  # kind
                                                                  torch.cuda.current_stream().cuda_stream))  # stream
             CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))
+
+            if rgba_map.dtype != xyz3.dtype:
+                warn_once(yellow(f'Using texture dtype {rgba_map.dtype}, expected {xyz3.dtype} for the output, will cast to {xyz3.dtype}'))
+                rgba_map = rgba_map.to(xyz3.dtype)
 
             return rgba_map  # H, W, 4
         else:
