@@ -58,7 +58,7 @@ class GSplatContextManager:
 
         if not self.offline_rendering:
             log(green_slim('Using online rendering mode, in this mode, calling the rendering function of fast_gauss will write directly to the currently bound framebuffer'))
-            log(green_slim('In this mode, the output of all rasterization calls will be None (same output count). Please do not perform further processing on them.'))
+            log(green_slim('In this mode, the output of all rasterization calls will be None (same output count). Please do not perform further processing on them'))
             log(green_slim('Please make sure to set up the correct GUI environment before calling the rasterization function, see more in readme.md'))
 
     def opengl_options(self):
@@ -212,17 +212,21 @@ class GSplatContextManager:
         self.cu_tex = CHECK_CUDART_ERROR(cudart.cudaGraphicsGLRegisterImage(self.tex_rgba, gl.GL_TEXTURE_2D, flags))
 
     def resize_textures(self, H: int, W: int):  # analogy to update_gl_buffers
-        if not hasattr(self, 'max_H'): self.max_H = 0
-        if not hasattr(self, 'max_W'): self.max_W = 0
+        init = False
+        if not hasattr(self, 'max_H'): self.max_H = 0; init = True
+        if not hasattr(self, 'max_W'): self.max_W = 0; init = True
         if H > self.max_H or W > self.max_W:  # max got updated
             if H > self.max_H: self.max_H = int(H * 1.05)
             if W > self.max_W: self.max_W = int(W * 1.05)
+            if not init: log(green_slim('Resizing textures to:'), int(H), int(W))
             self.init_textures(self.max_H, self.max_W)
 
     def resize_buffers(self, v: int = 0):
-        if not hasattr(self, 'max_verts'): self.max_verts = 0
+        init = False
+        if not hasattr(self, 'max_verts'): self.max_verts = 0; init = True;
         if v > self.max_verts:
             if v > self.max_verts: self.max_verts = int(v * 1.05)
+            if not init: log(green_slim('Resizing buffers to:'), int(v))
             self.init_gl_buffers(self.max_verts)
 
     @torch.no_grad()

@@ -100,7 +100,7 @@ yaml = MyYAML()
 yaml.default_flow_style = None
 
 warnings.filterwarnings("ignore")  # ignore disturbing warnings
-os.environ["PYTHONBREAKPOINT"] = "easyvolcap.utils.console_utils.set_trace"
+os.environ["PYTHONBREAKPOINT"] = "fast_gauss.console_utils.set_trace"
 
 slim_width = None
 verbose_width = None
@@ -109,8 +109,16 @@ slim_log_path = True
 slim_time_format = '%H:%M:%S'
 # slim_time_format = ''
 verbose_time_format = '%Y-%m-%d %H:%M:%S.%f'
-do_nothing_console = Console(file=StringIO(), stderr=StringIO())
-console = Console(soft_wrap=True, tab_size=4, log_time_format=slim_time_format, width=slim_width, log_time=slim_log_time, log_path=slim_log_path)  # shared
+
+# fmt: off
+if 'easyvolcap.utils.console_utils' in sys.modules:
+    console = sys.modules['easyvolcap.utils.console_utils'].console
+    do_nothing_console = sys.modules['easyvolcap.utils.console_utils'].do_nothing_console
+else:
+    do_nothing_console = Console(file=StringIO(), stderr=StringIO())
+    console = Console(soft_wrap=True, tab_size=4, log_time_format=slim_time_format, width=slim_width, log_time=slim_log_time, log_path=slim_log_path)
+# fmt: on
+
 progress = Progress(console=console, expand=True)  # destroyed
 live = Live(console=console, refresh_per_second=10)  # destroyed
 traceback.install(console=console, width=slim_width)  # for colorful tracebacks
