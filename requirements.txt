@@ -2,4 +2,4 @@ torch
 numpy
 cuda-python
 PyGLM
-PyOpenGL
+PyOpenGL>=3.1.7
