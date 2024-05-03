@@ -10,6 +10,7 @@ in vec2 vPosition;
 flat in vec4 vColor;
 
 const float eight = 8;
+uniform float minAlpha = 1 / 255;
 
 void main() {
     // Compute the positional squared distance from the center of the splat to the current fragment.
@@ -25,6 +26,8 @@ void main() {
     // the gaussian formula becomes the identity matrix. We're then left with (X - mean) * (X - mean),
     // and since 'mean' is zero, we have X * X, which is the same as A:
     float opacity = exp(-0.5 * A) * vColor.a;
+    if (opacity < minAlpha) discard;
+    opacity = min(0.99, opacity);
 
     gl_FragColor = vec4(vColor.rgb, opacity);
 }

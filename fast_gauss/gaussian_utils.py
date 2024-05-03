@@ -5,7 +5,7 @@ from .math_utils import point_padding
 
 
 @torch.jit.script
-def in_frustrum(xyz: torch.Tensor, full_proj_matrix: torch.Tensor, xy_padding: float = 0.2, padding: float = 0.2):
+def in_frustum(xyz: torch.Tensor, full_proj_matrix: torch.Tensor, xy_padding: float = 0.2, padding: float = 0.2):
     ndc = point_padding(xyz) @ full_proj_matrix  # this is now in clip space
     ndc = ndc[..., :3] / ndc[..., 3:]
     return (ndc[..., 2] > -1 - padding) & (ndc[..., 2] < 1 + padding) & (ndc[..., 0] > -1 - xy_padding) & (ndc[..., 0] < 1. + xy_padding) & (ndc[..., 1] > -1 - xy_padding) & (ndc[..., 1] < 1. + xy_padding)  # N,

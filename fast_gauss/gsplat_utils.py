@@ -14,7 +14,7 @@ from .sh_utils import eval_sh
 from .cuda_utils import CHECK_CUDART_ERROR
 from .math_utils import normalize, point_padding
 from .gl_utils import load_shader_source, use_gl_program
-from .gaussian_utils import build_cov6, in_frustrum
+from .gaussian_utils import build_cov6, in_frustum
 
 import OpenGL.GL as gl
 from OpenGL.GL import shaders
@@ -36,6 +36,9 @@ class GSplatContextManager:
                  init_texture_size: List[int] = [512, 512],
                  dtype: str = torch.float,  # +5-10 fps on 3060, not working too well with flame_salmon
                  tex_dtype: str = torch.half,  # +5-10 fps on 3060, not working too well with flame_salmon
+
+                 # DEBUG: whether to write back to cuda in offline rendering mode, only used for speed tests
+                 offline_writeback: bool = True,
                  ):
         self.attr_sizes = [3, 3, 3, 4]  # verts, cov6, rgba4
         self.dtype = getattr(torch, dtype) if isinstance(dtype, str) else dtype
@@ -47,6 +50,7 @@ class GSplatContextManager:
         # Perform actual rendering
         from .gl_utils import eglctx
         self.offline_rendering = eglctx is not None
+        self.offline_writeback = offline_writeback
 
         self.compile_shaders()
         self.use_gl_program(self.gsplat_program)
@@ -223,7 +227,7 @@ class GSplatContextManager:
 
     def resize_buffers(self, v: int = 0):
         init = False
-        if not hasattr(self, 'max_verts'): self.max_verts = 0; init = True;
+        if not hasattr(self, 'max_verts'): self.max_verts = 0; init = True
         if v > self.max_verts:
             if v > self.max_verts: self.max_verts = int(v * 1.05)
             if not init: log(green_slim('Resizing buffers to:'), int(v))
@@ -287,7 +291,7 @@ class GSplatContextManager:
         timer.record('rasterize')
 
         # Prepare the output
-        if self.offline_rendering:
+        if self.offline_rendering and self.offline_writeback:
             rgba_map = torch.empty((H, W, 4), dtype=self.tex_dtype, device='cuda')  # to hold the data from opengl
             # Texture access and copy could be very slow...
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
@@ -348,10 +352,10 @@ class GSplatContextManager:
 
         else:
 
-            visible = in_frustrum(means3D, raster_settings.projmatrix.to('cuda', non_blocking=True)).nonzero()[..., 0]  # S, # MARK: SYNC
+            visible = in_frustum(means3D, raster_settings.projmatrix.to('cuda', non_blocking=True)).nonzero()[..., 0]  # S, # MARK: SYNC
             means3D = means3D[visible]
             opacities = opacities[visible]
-            timer.record('frustrum')
+            timer.record('frustum')
 
             if cov3D_precomp is None:
                 cov3D_precomp = build_cov6(scales[visible], rotations[visible])
@@ -371,7 +375,7 @@ class GSplatContextManager:
         rgba_map = self.render(means3D, cov3D_precomp, colors_precomp, opacities, raster_settings)
         timer.record('return')
 
-        if self.offline_rendering:
+        if self.offline_rendering and self.offline_writeback:
             image, alpha = rgba_map.split([3, 1], dim=-1)
             image, alpha = image.permute(2, 0, 1), alpha.permute(2, 0, 1)
 
