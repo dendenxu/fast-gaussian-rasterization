@@ -8,9 +8,9 @@
  */
 
 uniform vec2 basisViewport;
-uniform float minAlpha = 1 / 255;
+uniform float discardAlpha = 0.0001;
 
-const float sqrt8 = sqrt(8);
+const float sqrt8 = sqrt(9);
 
 layout(points) in;
 layout(triangle_strip, max_vertices = 4) out;
@@ -27,7 +27,7 @@ vec2 computeNDCOffset(vec2 basisVector0, vec2 basisVector1, vec2 vPosition) {
 }
 
 void main() {
-    if (gColor[0].a < minAlpha) {
+    if (gColor[0].a < discardAlpha) {
         return;  // will not emit any quad for later rendering
     }
 

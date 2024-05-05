@@ -11,10 +11,10 @@ uniform mat4x4 P;
 uniform mat4x4 VM;
 uniform vec2 focal;
 
-uniform float minAlpha = 1 / 255;
-uniform float maxScreenSpaceSplatSize = 2048.0;
+uniform float discardAlpha = 0.0001;
+uniform float maxScreenSpaceSplatSize = 1024.0;
 
-const float sqrt8 = sqrt(8);
+const float sqrt8 = sqrt(9);
 
 layout(location = 0) in vec3 aPos;     // xyz
 layout(location = 1) in vec3 aCov0_3;  // cov6
@@ -26,7 +26,7 @@ out vec2 basisVector1;
 out vec4 gColor;  // pass through
 
 void main() {
-    if (aColor.a < minAlpha) {
+    if (aColor.a < discardAlpha) {
         gColor.a = 0.0;  // will not emit things in geometry shader
         return;
     }
@@ -81,13 +81,20 @@ void main() {
     float d = cov2Dv.z;
     float b = cov2Dv.y;
     float D = a * d - b * b;
+
+    if (D == 0.0 || cov2Dv.x < 0.0 || cov2Dv.z < 0.0) {
+        // Illegal cov matrix, this point should be pruned with zero gradients
+        gColor.a = 0.0;  // will not emit things
+        return;
+    }
+
     float trace = a + d;
     float traceOver2 = 0.5 * trace;
     float term2 = sqrt(max(0.1f, traceOver2 * traceOver2 - D));
     float eigenValue0 = traceOver2 + term2;
     float eigenValue1 = traceOver2 - term2;
 
-    if (eigenValue1 <= 0.0) {
+    if (eigenValue0 < 0.0 || eigenValue1 < 0) {
         gColor.a = 0.0;  // will not emit things
         return;
     }
