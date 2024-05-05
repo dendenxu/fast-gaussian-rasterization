@@ -9,7 +9,7 @@
 in vec2 vPosition;
 flat in vec4 vColor;
 
-const float eight = 8;
+const float eight = 9;
 uniform float minAlpha = 1 / 255;
 
 void main() {
