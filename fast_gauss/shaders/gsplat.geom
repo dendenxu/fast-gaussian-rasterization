@@ -10,7 +10,7 @@
 uniform vec2 basisViewport;
 uniform float discardAlpha = 0.0001;
 
-const float sqrt8 = sqrt(9);
+const float sqrt8 = sqrt(8);
 
 layout(points) in;
 layout(triangle_strip, max_vertices = 4) out;

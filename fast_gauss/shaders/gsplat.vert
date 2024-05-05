@@ -14,7 +14,7 @@ uniform vec2 focal;
 uniform float discardAlpha = 0.0001;
 uniform float maxScreenSpaceSplatSize = 1024.0;
 
-const float sqrt8 = sqrt(9);
+const float sqrt8 = sqrt(8);
 
 layout(location = 0) in vec3 aPos;     // xyz
 layout(location = 1) in vec3 aCov0_3;  // cov6
@@ -82,11 +82,11 @@ void main() {
     float b = cov2Dv.y;
     float D = a * d - b * b;
 
-    if (D == 0.0 || cov2Dv.x < 0.0 || cov2Dv.z < 0.0) {
-        // Illegal cov matrix, this point should be pruned with zero gradients
-        gColor.a = 0.0;  // will not emit things
-        return;
-    }
+    // if (D == 0.0 || cov2Dv.x < 0.0 || cov2Dv.z < 0.0) {
+    //     // Illegal cov matrix, this point should be pruned with zero gradients
+    //     gColor.a = 0.0;  // will not emit things
+    //     return;
+    // }
 
     float trace = a + d;
     float traceOver2 = 0.5 * trace;
@@ -94,10 +94,14 @@ void main() {
     float eigenValue0 = traceOver2 + term2;
     float eigenValue1 = traceOver2 - term2;
 
-    if (eigenValue0 < 0.0 || eigenValue1 < 0) {
+    if (eigenValue1 < 0) {
         gColor.a = 0.0;  // will not emit things
         return;
     }
+    // if (eigenValue0 < 0.0 || eigenValue1 < 0) {
+    //     gColor.a = 0.0;  // will not emit things
+    //     return;
+    // }
 
     vec2 eigenVector0 = normalize(vec2(b, eigenValue0 - a));
     // since the eigen vectors are orthogonal, we derive the second one from the first
