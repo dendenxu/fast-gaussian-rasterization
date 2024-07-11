@@ -12,8 +12,9 @@ uniform mat4x4 VM;
 uniform vec2 focal;
 
 uniform float discardAlpha = 0.0001;
-uniform float maxScreenSpaceSplatSize = 1500.0;
-uniform float sqrt8 = sqrt(9);
+// uniform float discardAlpha = 0.99;
+uniform float maxScreenSpaceSplatSize = 2048.0;
+uniform float sqrt8 = sqrt(8);
 
 layout(location = 0) in vec3 aPos;     // xyz
 layout(location = 1) in vec3 aCov0_3;  // cov6
