@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fast_gauss"
-version = "0.0.7"
+version = "0.0.8"
 description = "A geometry-shader-based, global CUDA sorted high-performance 3D Gaussian Splatting rasterizer. Can achieve a 5-10x speedup in rendering compared to the vanialla diff-gaussian-rasterization."
 readme = "readme.md"
 license = { file = "license" }
 authors = [{ email = "zhenx@zju.edu.cn" }, { name = "Zhen Xu" }]
-requires-python = ">=3.9"
+requires-python = ">=3.8"
 dynamic = ["dependencies"]
 
 [project.urls]

@@ -81,7 +81,7 @@ void main() {
     float b = cov2Dv.y;
     float D = a * d - b * b;
 
-    if (D == 0.0 || cov2Dv.x < 0.0 || cov2Dv.z < 0.0) {
+    if (D <= 0.0 || cov2Dv.x <= 0.0 || cov2Dv.z <= 0.0) {
         // Illegal cov matrix, this point should be pruned with zero gradients
         gColor.a = 0.0;  // will not emit things
         return;
@@ -97,7 +97,7 @@ void main() {
     //     gColor.a = 0.0;  // will not emit things
     //     return;
     // }
-    if (eigenValue0 < 0.0 || eigenValue1 < 0) {
+    if (eigenValue0 <= 0.01 || eigenValue1 <= 0.01 || eigenValue0 < eigenValue1 || (eigenValue0 / eigenValue1) > 10000.0) {
         gColor.a = 0.0;  // will not emit things
         return;
     }
