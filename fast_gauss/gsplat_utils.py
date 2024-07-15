@@ -19,7 +19,11 @@ from .gaussian_utils import build_cov6, in_frustum
 import OpenGL.GL as gl
 from OpenGL.GL import shaders
 
-timer = Timer(disabled=True)
+# timer = Timer(disabled=True)
+try:
+    from easyvolcap.utils.timer_utils import timer
+except ImportError as e:
+    log(yellow('Unable to import EasyVolcap camera, will build our own'))
 
 
 class GSplatContextManager:
@@ -288,6 +292,9 @@ class GSplatContextManager:
         gl.glBindVertexArray(0)
         gl.glViewport(x, y, w, h)
         gl.glScissor(x, y, w, h)
+
+        if not timer.disabled:
+            gl.glFinish()
         timer.record('rasterize')
 
         # Prepare the output
