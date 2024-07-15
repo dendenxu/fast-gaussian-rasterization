@@ -62,12 +62,12 @@ class GSplatContextManager:
         self.resize_buffers(init_buffer_size)
         self.resize_textures(*init_texture_size)
 
-        log(green_slim(f'GSplatContextManager initialized with attribute dtype: {self.dtype}, texture dtype: {self.tex_dtype}, offline rendering: {self.offline_rendering}, buffer size: {init_buffer_size}, texture size: {init_texture_size}'))
+        log(bold_slim(f'GSplatContextManager initialized with attribute dtype: {self.dtype}, texture dtype: {self.tex_dtype}, offline rendering: {self.offline_rendering}, buffer size: {init_buffer_size}, texture size: {init_texture_size}'))
 
         if not self.offline_rendering:
-            log(green_slim('Using online rendering mode, in this mode, calling the rendering function of fast_gauss will write directly to the currently bound framebuffer'))
-            log(green_slim('In this mode, the output of all rasterization calls will be None (same output count). Please do not perform further processing on them'))
-            log(green_slim('Please make sure to set up the correct GUI environment before calling the rasterization function, see more in readme.md'))
+            log(bold_slim('Using online rendering mode, in this mode, calling the rendering function of fast_gauss will write directly to the currently bound framebuffer'))
+            log(bold_slim('In this mode, the output of all rasterization calls will be None (same output count). Please do not perform further processing on them'))
+            log(bold_slim('Please make sure to set up the correct GUI environment before calling the rasterization function, see more in readme.md'))
 
     def opengl_options(self):
         # Performs face culling
@@ -226,7 +226,7 @@ class GSplatContextManager:
         if H > self.max_H or W > self.max_W:  # max got updated
             if H > self.max_H: self.max_H = int(H * 1.05)
             if W > self.max_W: self.max_W = int(W * 1.05)
-            if not init: log(green_slim('Resizing textures to:'), int(H), int(W))
+            if not init: log(bold_slim('Resizing textures to:'), int(H), int(W))
             self.init_textures(self.max_H, self.max_W)
 
     def resize_buffers(self, v: int = 0):
@@ -234,7 +234,7 @@ class GSplatContextManager:
         if not hasattr(self, 'max_verts'): self.max_verts = 0; init = True
         if v > self.max_verts:
             if v > self.max_verts: self.max_verts = int(v * 1.05)
-            if not init: log(green_slim('Resizing buffers to:'), int(v))
+            if not init: log(bold_slim('Resizing buffers to:'), int(v))
             self.init_gl_buffers(self.max_verts)
 
     @torch.no_grad()
