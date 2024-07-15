@@ -279,6 +279,7 @@ def green(string: str) -> str: return f'[green bold]{string}[/]'
 def yellow(string: str) -> str: return f'[yellow bold]{string}[/]'
 def magenta(string: str) -> str: return f'[magenta bold]{string}[/]'
 def color(string: str, color: str): return f'[{color} bold]{string}[/]'
+def bold(string: str): return f'[bold]{string}[/]'
 
 
 def red_slim(string: str) -> str: return f'[red]{string}[/]'
@@ -289,6 +290,8 @@ def green_slim(string: str) -> str: return f'[green]{string}[/]'
 def yellow_slim(string: str) -> str: return f'[yellow]{string}[/]'
 def magenta_slim(string: str) -> str: return f'[magenta]{string}[/]'
 def color_slim(string: str, color: str): return f'[{color}]{string}[/]'
+def slim(string: str): return f'{string}'
+
 
 
 def markup_to_ansi(string: str) -> str:
