@@ -106,9 +106,9 @@ class GSplatContextManager:
         # FIXME: Possible nasty synchronization issue: raster_settings might contain cuda tensors
         # TODO: Add a warning here to make the user pass in cpu tensors to avoid explicit synchronization
 
-        P = raster_settings.projmatrix.detach().cpu().numpy()  # 4,4 # MARK: possible sync
+        P = raster_settings.projmatrix.detach().cpu().numpy() if isinstance(raster_settings.projmatrix, torch.Tensor) else raster_settings.projmatrix  # 4,4 # MARK: possible sync
         P = mat4(*P.tolist())
-        V = raster_settings.viewmatrix.detach().cpu().numpy()  # 4,4 # MARK: possible sync
+        V = raster_settings.viewmatrix.detach().cpu().numpy() if isinstance(raster_settings.viewmatrix, torch.Tensor) else raster_settings.viewmatrix  # 4,4 # MARK: possible sync
         V = mat4(*V.tolist())
 
         if not self.offline_rendering:
@@ -239,9 +239,14 @@ class GSplatContextManager:
 
     @torch.no_grad()
     def render(self, xyz3: torch.Tensor, cov6: torch.Tensor, rgb3: torch.Tensor, occ1: torch.Tensor, raster_settings: 'GaussianRasterizationSettings'):
-        if xyz3.dtype != self.dtype:
+        # Compute GS
+        data = torch.cat([xyz3, cov6, rgb3, occ1], dim=-1)  # slow memory operation
+        stream = torch.cuda.current_stream().cuda_stream
+
+        # Preparing dtype
+        if data.dtype != self.dtype:
             warn_once(yellow(f'Input tensors has dtype {xyz3.dtype}, expected {self.dtype}, will cast to {self.dtype}'))
-            xyz3, cov6, rgb3, occ1 = xyz3.to(self.dtype), cov6.to(self.dtype), rgb3.to(self.dtype), occ1.to(self.dtype)
+            data = data.to(self.dtype)
             for key in raster_settings:
                 if isinstance(raster_settings[key], torch.Tensor):
                     raster_settings[key] = raster_settings[key].to(self.dtype)
@@ -252,11 +257,10 @@ class GSplatContextManager:
         self.resize_buffers(len(xyz3))
         timer.record('resize')
 
-        # Compute GS
-        data = torch.cat([xyz3, cov6, rgb3, occ1], dim=-1)
-
         # Sort by view space depth
-        view = point_padding(xyz3) @ raster_settings.viewmatrix.to('cuda', non_blocking=True)
+        # view = point_padding(xyz3) @ raster_settings.viewmatrix.to('cuda', non_blocking=True)
+        w2cT = torch.as_tensor(raster_settings.viewmatrix).to(data.device, non_blocking=True)
+        view = xyz3 @ w2cT[:3, :3] + w2cT[:3, 3]
         idx = view[..., 2].argsort(descending=True)  # S, sorted
         data = data[idx].ravel().contiguous()  # sorted data on gpu
         timer.record('sorting')
@@ -266,15 +270,15 @@ class GSplatContextManager:
         from .cuda_utils import CHECK_CUDART_ERROR, FORMAT_CUDART_ERROR
         kind = cudart.cudaMemcpyKind.cudaMemcpyDeviceToDevice
 
-        CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
+        CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, self.cu_vbo, stream))
         cu_vbo_ptr, cu_vbo_size = CHECK_CUDART_ERROR(cudart.cudaGraphicsResourceGetMappedPointer(self.cu_vbo))
 
         CHECK_CUDART_ERROR(cudart.cudaMemcpyAsync(cu_vbo_ptr,
                                                   data.data_ptr(),
                                                   data.numel() * data.element_size(),
                                                   kind,
-                                                  torch.cuda.current_stream().cuda_stream))
-        CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, torch.cuda.current_stream().cuda_stream))
+                                                  stream))
+        CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, stream))
         timer.record('copy')
 
         if self.offline_rendering:
@@ -282,13 +286,12 @@ class GSplatContextManager:
             gl.glClearColor(0, 0, 0, 1.)
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
-        self.use_gl_program(self.gsplat_program)
         self.upload_gl_uniforms(raster_settings)
         x, y, w, h = gl.glGetIntegerv(gl.GL_VIEWPORT)
         gl.glViewport(0, 0, W, H)
         gl.glScissor(0, 0, W, H)  # only render in this small region of the viewport
         gl.glBindVertexArray(self.vao)
-        gl.glDrawArrays(gl.GL_POINTS, 0, len(idx))  # number of vertices
+        gl.glDrawArrays(gl.GL_POINTS, 0, len(xyz3))  # number of vertices
         gl.glBindVertexArray(0)
         gl.glViewport(x, y, w, h)
         gl.glScissor(x, y, w, h)
@@ -309,7 +312,7 @@ class GSplatContextManager:
             # The resources in resources may be accessed by CUDA until they are unmapped.
             # The graphics API from which resources were registered should not access any resources while they are mapped by CUDA.
             # If an application does so, the results are undefined.
-            CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))
+            CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, cu_tex, stream))
             cu_tex_arr = CHECK_CUDART_ERROR(cudart.cudaGraphicsSubResourceGetMappedArray(cu_tex, 0, 0))
             CHECK_CUDART_ERROR(cudart.cudaMemcpy2DFromArrayAsync(rgba_map.data_ptr(),  # dst
                                                                  W * 4 * rgba_map.element_size(),  # dpitch
@@ -319,8 +322,8 @@ class GSplatContextManager:
                                                                  W * 4 * rgba_map.element_size(),  # width Width of matrix transfer (columns in bytes)
                                                                  H,  # height
                                                                  kind,  # kind
-                                                                 torch.cuda.current_stream().cuda_stream))  # stream
-            CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, torch.cuda.current_stream().cuda_stream))
+                                                                 stream))  # stream
+            CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, stream))
 
             if rgba_map.dtype != xyz3.dtype:
                 warn_once(yellow(f'Using texture dtype {rgba_map.dtype}, expected {xyz3.dtype} for the output, will cast to {xyz3.dtype}'))
