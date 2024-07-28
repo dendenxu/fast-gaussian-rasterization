@@ -100,6 +100,7 @@ class GSplatContextManager:
         self.uniforms.P = gl.glGetUniformLocation(program, "P")
         self.uniforms.VM = gl.glGetUniformLocation(program, "VM")
         self.uniforms.focal = gl.glGetUniformLocation(program, "focal")
+        self.uniforms.principal = gl.glGetUniformLocation(program, "principal")
         self.uniforms.basisViewport = gl.glGetUniformLocation(program, "basisViewport")
 
     def upload_gl_uniforms(self, raster_settings: 'GaussianRasterizationSettings'):
@@ -111,8 +112,10 @@ class GSplatContextManager:
         V = raster_settings.viewmatrix.detach().cpu().numpy() if isinstance(raster_settings.viewmatrix, torch.Tensor) else raster_settings.viewmatrix  # 4,4 # MARK: possible sync
         V = mat4(*V.tolist())
 
+        K = P * glm.affineInverse(V)
+        cx = (K[2][0] + 1) / 2 * raster_settings.image_width
+        cy = (K[2][1] + 1) / 2 * raster_settings.image_height
         if not self.offline_rendering:
-            K = P * glm.affineInverse(V)
 
             gl_c2w = glm.affineInverse(V)
             gl_c2w[0] *= 1  # do notflip x
@@ -132,6 +135,7 @@ class GSplatContextManager:
         gl.glUniformMatrix4fv(self.uniforms.P, 1, gl.GL_FALSE, glm.value_ptr(P))  # o2c
         gl.glUniformMatrix4fv(self.uniforms.VM, 1, gl.GL_FALSE, glm.value_ptr(VM))  # o2w
         gl.glUniform2f(self.uniforms.focal, 0.5 * raster_settings.image_width / raster_settings.tanfovx, 0.5 * raster_settings.image_height / raster_settings.tanfovy)  # focal in pixel space
+        gl.glUniform2f(self.uniforms.principal, cx, cy)  # focal
         gl.glUniform2f(self.uniforms.basisViewport, 1 / raster_settings.image_width, 1 / raster_settings.image_height)  # focal
 
     def init_gl_buffers(self, v: int = 0):

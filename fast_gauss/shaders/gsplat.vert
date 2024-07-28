@@ -7,19 +7,21 @@
   The RGBA color of the GS is also passed as is to the geometry shader
  */
 
-uniform int H;
-uniform int W;
-uniform float n;
-uniform float f;
-uniform mat3x3 K;
+// uniform int H;
+// uniform int W;
+// uniform float n;
+// uniform float f;
+// uniform mat3x3 K;
 
 uniform mat4x4 P;
 uniform mat4x4 VM;
 uniform vec2 focal;
 uniform vec2 principal;
+uniform vec2 basisViewport;
 
+// uniform float discardAlpha = 0.1;
 uniform float discardAlpha = 0.0001;
-// uniform float discardAlpha = 0.99;
+// uniform float discardAlpha = 0.15;
 uniform float maxScreenSpaceSplatSize = 2048.0;
 uniform float sqrt8 = sqrt(8);
 
@@ -50,8 +52,8 @@ void main() {
         aCov0_3[2], aCov3_6[1], aCov3_6[2]);
 
     // Construct the Jacobian of the affine approximation of the projection matrix. It will be used to transform the
-    float width = W;
-    float height = H;
+    float width = 1 / basisViewport[0];
+    float height = 1 / basisViewport[1];
     float fx = focal[0];
     float fy = focal[1];
     float cx = principal[0];
@@ -59,21 +61,23 @@ void main() {
     float x = viewCenter.x;
     float y = viewCenter.y;
     float z = viewCenter.z;
+
     float tan_fovx = 0.5 * width / fx;
     float tan_fovy = 0.5 * height / fy;
-    float rz = 1.f / z;
+    float rz = 1.0 / z;
     float rz2 = rz * rz;
-    float lim_x_pos = (width - cx) / fx + 0.3f * tan_fovx;
-    float lim_x_neg = cx / fx + 0.3f * tan_fovx;
-    float lim_y_pos = (height - cy) / fy + 0.3f * tan_fovy;
-    float lim_y_neg = cy / fy + 0.3f * tan_fovy;
+
+    float lim_x_pos = (width - cx) / fx + 0.3 * tan_fovx;
+    float lim_x_neg = cx / fx + 0.3 * tan_fovx;
+    float lim_y_pos = (height - cy) / fy + 0.3 * tan_fovy;
+    float lim_y_neg = cy / fy + 0.3 * tan_fovy;
     float tx = z * min(lim_x_pos, max(-lim_x_neg, x * rz));
     float ty = z * min(lim_y_pos, max(-lim_y_neg, y * rz));
 
     float s = 1.0 / (viewCenter.z * viewCenter.z);
     mat3 J = mat3(
-        focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) * s,
-        0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) * s,
+        focal.x / viewCenter.z, 0., -(focal.x * tx) * s,
+        0., focal.y / viewCenter.z, -(focal.y * ty) * s,
         0., 0., 0.);
 
     // Concatenate the projection approximation with the model-view transformation
