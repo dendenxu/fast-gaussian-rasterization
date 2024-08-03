@@ -249,11 +249,15 @@ class GSplatContextManager:
 
         # Preparing dtype
         if data.dtype != self.dtype:
-            warn_once(yellow(f'Input tensors has dtype {xyz3.dtype}, expected {self.dtype}, will cast to {self.dtype}'))
-            data = data.to(self.dtype)
+            warn_once(yellow(f'Input tensors has dtype {data.dtype}, expected {self.dtype}, will cast to {self.dtype}'))
+            data = data.type(self.dtype)
+            xyz3 = xyz3.type(self.dtype)
+            raster_settings = dotdict(raster_settings._asdict())
             for key in raster_settings:
                 if isinstance(raster_settings[key], torch.Tensor):
-                    raster_settings[key] = raster_settings[key].to(self.dtype)
+                    raster_settings[key] = raster_settings[key].type(self.dtype)
+                elif isinstance(raster_settings[key], np.ndarray):
+                    raster_settings[key] = torch.from_numpy(raster_settings[key]).type(self.dtype).numpy()  # HACK: More efficient way?
 
         # Prepare OpenGL texture size
         H, W = raster_settings.image_height, raster_settings.image_width
