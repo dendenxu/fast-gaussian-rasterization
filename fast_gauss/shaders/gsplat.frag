@@ -11,6 +11,7 @@ flat in vec4 vColor;
 
 uniform float eight = 8;
 uniform float minAlpha = 1 / 255;
+uniform float maxAlpha = 0.99;
 
 void main() {
     // Compute the positional squared distance from the center of the splat to the current fragment.
@@ -32,7 +33,7 @@ void main() {
     // float opacity = exp(-0.5 * A) * vColor.a;
     if (opacity < minAlpha)
         discard;
-    // opacity = min(0.99, opacity);
+    // opacity = min(maxAlpha, opacity);
 
     gl_FragColor = vec4(vColor.rgb, opacity);
 }

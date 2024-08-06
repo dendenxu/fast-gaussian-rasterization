@@ -24,6 +24,7 @@ uniform float discardAlpha = 0.0001;
 // uniform float discardAlpha = 0.15;
 uniform float maxScreenSpaceSplatSize = 2048.0;
 uniform float sqrt8 = sqrt(8);
+// uniform float sqrt8 = 3;
 
 layout(location = 0) in vec3 aPos;     // xyz
 layout(location = 1) in vec3 aCov0_3;  // cov6
@@ -64,20 +65,19 @@ void main() {
 
     float tan_fovx = 0.5 * width / fx;
     float tan_fovy = 0.5 * height / fy;
-    float rz = 1.0 / z;
-    float rz2 = rz * rz;
-
     float lim_x_pos = (width - cx) / fx + 0.3 * tan_fovx;
     float lim_x_neg = cx / fx + 0.3 * tan_fovx;
     float lim_y_pos = (height - cy) / fy + 0.3 * tan_fovy;
     float lim_y_neg = cy / fy + 0.3 * tan_fovy;
+
+    float rz = 1.0 / z;
+    float rz2 = rz * rz;
     float tx = z * min(lim_x_pos, max(-lim_x_neg, x * rz));
     float ty = z * min(lim_y_pos, max(-lim_y_neg, y * rz));
 
-    float s = 1.0 / (viewCenter.z * viewCenter.z);
     mat3 J = mat3(
-        focal.x / viewCenter.z, 0., -(focal.x * tx) * s,
-        0., focal.y / viewCenter.z, -(focal.y * ty) * s,
+        fx * rz, 0., -fx * tx * rz2,
+        0., fy * rz, -fy * ty * rz2,
         0., 0., 0.);
 
     // Concatenate the projection approximation with the model-view transformation
