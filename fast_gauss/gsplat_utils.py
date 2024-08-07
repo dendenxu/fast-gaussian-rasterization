@@ -87,9 +87,9 @@ class GSplatContextManager:
     def compile_shaders(self):
         try:
             self.gsplat_program = shaders.compileProgram(
-                shaders.compileShader(load_shader_source('gsplat.vert'), gl.GL_VERTEX_SHADER),
-                shaders.compileShader(load_shader_source('gsplat.geom'), gl.GL_GEOMETRY_SHADER),
-                shaders.compileShader(load_shader_source('gsplat.frag'), gl.GL_FRAGMENT_SHADER)
+                shaders.compileShader(load_shader_source('dsplat.vert'), gl.GL_VERTEX_SHADER),
+                shaders.compileShader(load_shader_source('dsplat.geom'), gl.GL_GEOMETRY_SHADER),
+                shaders.compileShader(load_shader_source('dsplat.frag'), gl.GL_FRAGMENT_SHADER)
             )
         except Exception as e:
             print(str(e).encode('utf-8').decode('unicode_escape'))
@@ -102,6 +102,7 @@ class GSplatContextManager:
         self.uniforms.focal = gl.glGetUniformLocation(program, "focal")
         self.uniforms.principal = gl.glGetUniformLocation(program, "principal")
         self.uniforms.basisViewport = gl.glGetUniformLocation(program, "basisViewport")
+        self.uniforms.useDepth = gl.glGetUniformLocation(program, "useDepth")
 
     def upload_gl_uniforms(self, raster_settings: 'GaussianRasterizationSettings'):
         # FIXME: Possible nasty synchronization issue: raster_settings might contain cuda tensors
@@ -137,6 +138,7 @@ class GSplatContextManager:
         gl.glUniform2f(self.uniforms.focal, 0.5 * raster_settings.image_width / raster_settings.tanfovx, 0.5 * raster_settings.image_height / raster_settings.tanfovy)  # focal in pixel space
         gl.glUniform2f(self.uniforms.principal, cx, cy)  # focal
         gl.glUniform2f(self.uniforms.basisViewport, 1 / raster_settings.image_width, 1 / raster_settings.image_height)  # focal
+        gl.glUniform1i(self.uniforms.useDepth, 1 if raster_settings.use_depth else 0)
 
     def init_gl_buffers(self, v: int = 0):
         from cuda import cudart
@@ -398,6 +400,6 @@ class GSplatContextManager:
             image, alpha = image.permute(2, 0, 1), alpha.permute(2, 0, 1)
 
             # FIXME: Alpha channel seems to be bugged
-            return image.float(), torch.ones_like(alpha).float()
+            return image.float(), alpha.float()
         else:
             return None, None

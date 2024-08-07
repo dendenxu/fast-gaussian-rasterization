@@ -16,10 +16,11 @@ class GaussianRasterizationSettings(NamedTuple):
     scale_modifier: float
     viewmatrix: torch.Tensor
     projmatrix: torch.Tensor
-    sh_degree: int
     campos: torch.Tensor
-    prefiltered: bool
-    debug: bool
+    sh_degree: int = 3
+    prefiltered: bool = True
+    debug: bool = False
+    use_depth: bool = False
 
 
 class GaussianRasterizer:
