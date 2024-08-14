@@ -189,7 +189,7 @@ class GSplatContextManager:
 
         if hasattr(self, 'fbo'):
             gl.glDeleteFramebuffers(1, [self.fbo])
-            gl.glDeleteTextures(1, [self.rbo_rgba, self.rbo_atth])
+            gl.glDeleteRenderbuffers(1, [self.rbo_rgba, self.rbo_atth])
 
         # Prepare for write frame buffers
         self.rbo_rgba = gl.glGenRenderbuffers(1)
