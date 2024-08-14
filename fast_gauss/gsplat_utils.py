@@ -4,6 +4,7 @@ if TYPE_CHECKING:
     from . import GaussianRasterizationSettings
 
 import glm
+import math
 import torch
 import ctypes
 
@@ -188,29 +189,24 @@ class GSplatContextManager:
 
         if hasattr(self, 'fbo'):
             gl.glDeleteFramebuffers(1, [self.fbo])
-            gl.glDeleteTextures(1, [self.tex_rgba, self.tex_atth])
+            gl.glDeleteTextures(1, [self.rbo_rgba, self.rbo_atth])
 
         # Prepare for write frame buffers
-        self.tex_rgba = gl.glGenTextures(1)
-        self.tex_atth = gl.glGenTextures(1)
+        self.rbo_rgba = gl.glGenRenderbuffers(1)
+        self.rbo_atth = gl.glGenRenderbuffers(1)
         self.fbo = gl.glGenFramebuffers(1)  # generate 1 framebuffer, storereference in fb
 
         # Init the texture (call the resizing function), will simply allocate empty memory
         # The internal format describes how the texture shall be stored in the GPU. The format describes how the format of your pixel data in client memory (together with the type parameter).
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.tex_rgba)
-        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, self.gl_tex_dtype, W, H, 0, gl.GL_RGBA, gl.GL_FLOAT, ctypes.c_void_p(0))  # 16 * 4
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
-
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.tex_atth)
-        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_DEPTH_COMPONENT24, W, H, 0, gl.GL_DEPTH_COMPONENT, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))  # 32
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
+        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo_rgba)
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_RGBA8, W, H)
+        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo_atth)
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT, W, H)
 
         # Bind texture to fbo
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
-        gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.tex_rgba, 0)  # location 0
-        gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_TEXTURE_2D, self.tex_atth, 0)
+        gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_RENDERBUFFER, self.rbo_rgba)
+        gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo_atth)
         gl.glDrawBuffers(1, [gl.GL_COLOR_ATTACHMENT0])
 
         # Check framebuffer status
@@ -223,7 +219,7 @@ class GSplatContextManager:
 
         # Register image to read from
         flags = cudart.cudaGraphicsRegisterFlags.cudaGraphicsRegisterFlagsReadOnly
-        self.cu_tex = CHECK_CUDART_ERROR(cudart.cudaGraphicsGLRegisterImage(self.tex_rgba, gl.GL_TEXTURE_2D, flags))
+        self.cu_tex = CHECK_CUDART_ERROR(cudart.cudaGraphicsGLRegisterImage(self.rbo_rgba, gl.GL_RENDERBUFFER, flags))
 
     def resize_textures(self, H: int, W: int):  # analogy to update_gl_buffers
         init = False
@@ -298,13 +294,34 @@ class GSplatContextManager:
 
         self.upload_gl_uniforms(raster_settings)
         x, y, w, h = gl.glGetIntegerv(gl.GL_VIEWPORT)
-        gl.glViewport(0, 0, W, H)
-        gl.glScissor(0, 0, W, H)  # only render in this small region of the viewport
-        gl.glBindVertexArray(self.vao)
-        gl.glDrawArrays(gl.GL_POINTS, 0, len(xyz3))  # number of vertices
-        gl.glBindVertexArray(0)
-        gl.glViewport(x, y, w, h)
-        gl.glScissor(x, y, w, h)
+
+        if W == w and H == h and x == 0 and y == 0:
+            # Will simply render to the currently bound framebuffer
+            gl.glBindVertexArray(self.vao)
+            gl.glDrawArrays(gl.GL_POINTS, 0, len(xyz3))  # number of vertices
+            gl.glBindVertexArray(0)
+        else:
+            # Will render to the texture and then perform a blit
+            old = gl.glGetInteger(gl.GL_DRAW_FRAMEBUFFER_BINDING)
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
+            gl.glClearColor(0, 0, 0, 1.)
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+
+            gl.glViewport(0, 0, W, H)
+            gl.glScissor(0, 0, W, H)  # only render in this small region of the viewport
+
+            gl.glBindVertexArray(self.vao)
+            gl.glDrawArrays(gl.GL_POINTS, 0, len(xyz3))  # number of vertices
+            gl.glBindVertexArray(0)
+
+            gl.glViewport(x, y, w, h)
+            gl.glScissor(x, y, w, h)  # only render in this small region of the viewport
+
+            gl.glBindFramebuffer(gl.GL_DRAW_FRAMEBUFFER, old)  # read buffer defaults to 0
+            gl.glBlitFramebuffer(0, 0, W, H,
+                                 x, y, x + w, y + h,
+                                 gl.GL_COLOR_BUFFER_BIT, gl.GL_LINEAR)  # now self.tex contains the content of the already rendered frame
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, old)
 
         if not timer.disabled:
             gl.glFinish()
