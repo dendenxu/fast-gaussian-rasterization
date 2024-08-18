@@ -40,7 +40,7 @@ class GSplatContextManager:
                  init_buffer_size: int = 32768,
                  init_texture_size: List[int] = [512, 512],
                  dtype: str = torch.float,  # +5-10 fps on 3060, not working too well with flame_salmon
-                 tex_dtype: str = torch.half,  # +5-10 fps on 3060, not working too well with flame_salmon
+                 tex_dtype: str = torch.uint8,  # +5-10 fps on 3060, not working too well with flame_salmon
 
                  # DEBUG: whether to write back to cuda in offline rendering mode, only used for speed tests
                  offline_writeback: bool = True,
@@ -48,7 +48,7 @@ class GSplatContextManager:
         self.attr_sizes = [3, 3, 3, 4]  # verts, cov6, rgba4
         self.dtype = getattr(torch, dtype) if isinstance(dtype, str) else dtype
         self.tex_dtype = getattr(torch, tex_dtype) if isinstance(tex_dtype, str) else tex_dtype
-        self.gl_tex_dtype = gl.GL_RGBA16F if self.tex_dtype == torch.half else gl.GL_RGBA32F
+        self.gl_tex_dtype = gl.GL_RGBA16F if self.tex_dtype == torch.half else gl.GL_RGBA32F if self.tex_dtype == torch.float else gl.GL_RGBA8
         self.gl_attr_dtypes = [gl.GL_FLOAT if self.dtype == torch.float else gl.GL_HALF_FLOAT] * len(self.attr_sizes)
         self.uniforms = dotdict()  # uniform values
 
@@ -63,7 +63,7 @@ class GSplatContextManager:
         self.resize_buffers(init_buffer_size)
         self.resize_textures(*init_texture_size)
 
-        log(bold(f'[FAST GAUSS] GSplatContextManager initialized with attribute dtype: {self.dtype}, texture dtype: {self.tex_dtype}, offline rendering: {self.offline_rendering}, buffer size: {init_buffer_size}, texture size: {init_texture_size}'))
+        log(bold(f'[FAST GAUSS] GSplatContextManager initialized with attribute dtype: {self.dtype}, texture dtype: {self.tex_dtype}, offline rendering: {self.offline_rendering}, vertex buffer size: {init_buffer_size}, render buffer size: {init_texture_size}'))
 
         if not self.offline_rendering:
             log(bold('[FAST GAUSS] Using online rendering mode, in this mode, calling the rendering function of fast_gauss will write directly to the currently bound framebuffer'))
@@ -199,7 +199,7 @@ class GSplatContextManager:
         # Init the texture (call the resizing function), will simply allocate empty memory
         # The internal format describes how the texture shall be stored in the GPU. The format describes how the format of your pixel data in client memory (together with the type parameter).
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo_rgba)
-        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_RGBA8, W, H)
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, self.gl_tex_dtype, W, H)  # faster if using rgba8
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo_atth)
         gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT, W, H)
 
@@ -228,7 +228,7 @@ class GSplatContextManager:
         if H > self.max_H or W > self.max_W:  # max got updated
             if H > self.max_H: self.max_H = int(H * 1.05)
             if W > self.max_W: self.max_W = int(W * 1.05)
-            if not init: log(bold('[FAST GAUSS] Resizing textures to:'), int(H), int(W))
+            if not init: log(bold('[FAST GAUSS] Resizing render buffers to:'), int(H), int(W))
             self.init_textures(self.max_H, self.max_W)
 
     def resize_buffers(self, v: int = 0):
@@ -236,7 +236,7 @@ class GSplatContextManager:
         if not hasattr(self, 'max_verts'): self.max_verts = 0; init = True
         if v > self.max_verts:
             if v > self.max_verts: self.max_verts = int(v * 1.05)
-            if not init: log(bold('[FAST GAUSS] Resizing buffers to:'), int(v))
+            if not init: log(bold('[FAST GAUSS] Resizing vertex buffers to:'), int(v))
             self.init_gl_buffers(self.max_verts)
 
     @torch.no_grad()
@@ -353,8 +353,12 @@ class GSplatContextManager:
             CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, stream))
 
             if rgba_map.dtype != xyz3.dtype:
-                warn_once(yellow(f'Using texture dtype {rgba_map.dtype}, expected {xyz3.dtype} for the output, will cast to {xyz3.dtype}'))
-                rgba_map = rgba_map.to(xyz3.dtype)
+                warn_once(yellow(f'[FAST GAUSS] Using render buffer dtype {rgba_map.dtype}, expected {xyz3.dtype} for the output, will cast to {xyz3.dtype}'))
+                if not torch.is_floating_point(rgba_map):
+                    warn_once(yellow(f'[FAST GAUSS] Using a non-floating-point render buffer dtype: {rgba_map.dtype}, this might cause some precision loss'))
+                    rgba_map = rgba_map / torch.iinfo(rgba_map.dtype).max  # should be 255 for uint8
+                else:
+                    rgba_map = rgba_map.to(xyz3.dtype)
 
             return rgba_map  # H, W, 4
         else:

@@ -114,13 +114,19 @@ verbose_time_format = '%Y-%m-%d %H:%M:%S.%f'
 if 'easyvolcap.utils.console_utils' in sys.modules:
     console = sys.modules['easyvolcap.utils.console_utils'].console
     do_nothing_console = sys.modules['easyvolcap.utils.console_utils'].do_nothing_console
+    progress = sys.modules['easyvolcap.utils.console_utils'].progress
+    live = sys.modules['easyvolcap.utils.console_utils'].live
+    log = sys.modules['easyvolcap.utils.console_utils'].log
+    bold = sys.modules['easyvolcap.utils.console_utils'].bold
+    green = sys.modules['easyvolcap.utils.console_utils'].green
+    log(green('[FAST GAUSS] Reusing console from easyvolcap.utils.console_utils'))
 else:
     do_nothing_console = Console(file=StringIO(), stderr=StringIO())
     console = Console(soft_wrap=True, tab_size=4, log_time_format=slim_time_format, width=slim_width, log_time=slim_log_time, log_path=slim_log_path)
+    progress = Progress(console=console, expand=True)  # destroyed
+    live = Live(console=console, refresh_per_second=10)  # destroyed
 # fmt: on
 
-progress = Progress(console=console, expand=True)  # destroyed
-live = Live(console=console, refresh_per_second=10)  # destroyed
 traceback.install(console=console, width=slim_width)  # for colorful tracebacks
 pretty.install(console=console)
 
@@ -291,7 +297,6 @@ def yellow_slim(string: str) -> str: return f'[yellow]{string}[/]'
 def magenta_slim(string: str) -> str: return f'[magenta]{string}[/]'
 def color_slim(string: str, color: str): return f'[{color}]{string}[/]'
 def slim(string: str): return f'{string}'
-
 
 
 def markup_to_ansi(string: str) -> str:

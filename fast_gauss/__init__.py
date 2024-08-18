@@ -29,7 +29,7 @@ class GaussianRasterizer:
                  init_buffer_size: int = 32768,
                  init_texture_size: List[int] = [512, 512],
                  dtype=torch.float,
-                 tex_dtype=torch.half):
+                 tex_dtype=torch.uint8):
         super().__init__()
         self.raster_settings = raster_settings
 
