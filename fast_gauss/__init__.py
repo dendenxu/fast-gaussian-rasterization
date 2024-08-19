@@ -22,6 +22,8 @@ class GaussianRasterizationSettings(NamedTuple):
     debug: bool = False
     use_depth: bool = False
 
+    solid_mode: bool = False
+
 
 class GaussianRasterizer:
     def __init__(self,

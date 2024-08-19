@@ -11,6 +11,8 @@ flat in vec4 vColor;
 flat in float vDepth;
 
 uniform bool useDepth = false;
+uniform bool solidMode = false;
+
 uniform float eight = 8;
 uniform float minAlpha = 1 / 255;
 uniform float maxAlpha = 0.99;
@@ -39,6 +41,9 @@ void main() {
     if (opacity < minAlpha)
         discard;
     // opacity = min(maxAlpha, opacity);
+
+    if (solidMode)
+        opacity = 1.0;
 
     if (useDepth)
         write_color = vec4(vec3(vDepth), opacity);

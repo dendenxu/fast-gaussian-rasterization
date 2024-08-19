@@ -104,6 +104,7 @@ class GSplatContextManager:
         self.uniforms.principal = gl.glGetUniformLocation(program, "principal")
         self.uniforms.basisViewport = gl.glGetUniformLocation(program, "basisViewport")
         self.uniforms.useDepth = gl.glGetUniformLocation(program, "useDepth")
+        self.uniforms.solidMode = gl.glGetUniformLocation(program, "solidMode")
 
     def upload_gl_uniforms(self, raster_settings: 'GaussianRasterizationSettings'):
         # FIXME: Possible nasty synchronization issue: raster_settings might contain cuda tensors
@@ -140,6 +141,7 @@ class GSplatContextManager:
         gl.glUniform2f(self.uniforms.principal, cx, cy)  # focal
         gl.glUniform2f(self.uniforms.basisViewport, 1 / raster_settings.image_width, 1 / raster_settings.image_height)  # focal
         gl.glUniform1i(self.uniforms.useDepth, 1 if raster_settings.use_depth else 0)
+        gl.glUniform1i(self.uniforms.solidMode, 1 if raster_settings.solid_mode else 0)
 
     def init_gl_buffers(self, v: int = 0):
         from cuda import cudart
@@ -264,6 +266,8 @@ class GSplatContextManager:
         timer.record('resize')
 
         # Sort by view space depth
+        # FIXME: For unknown reasons, sorting also required for solid mode?
+        # if not raster_settings.solid_mode:  # only perform sorting when not using solid mode
         # view = point_padding(xyz3) @ raster_settings.viewmatrix.to('cuda', non_blocking=True)
         w2cT = torch.as_tensor(raster_settings.viewmatrix).to(data.device, non_blocking=True)
         view = xyz3 @ w2cT[:3, :3] + w2cT[:3, 3]
