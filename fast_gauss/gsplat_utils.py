@@ -20,12 +20,6 @@ from .gaussian_utils import build_cov6, in_frustum
 import OpenGL.GL as gl
 from OpenGL.GL import shaders
 
-# timer = Timer(disabled=True)
-try:
-    from easyvolcap.utils.timer_utils import timer
-except ImportError as e:
-    log(yellow('Unable to import EasyVolcap camera, will build our own'))
-
 
 class GSplatContextManager:
     """
@@ -263,7 +257,6 @@ class GSplatContextManager:
         H, W = raster_settings.image_height, raster_settings.image_width
         self.resize_textures(H, W)
         self.resize_buffers(len(xyz3))
-        timer.record('resize')
 
         # Sort by view space depth
         # FIXME: For unknown reasons, sorting also required for solid mode?
@@ -273,7 +266,6 @@ class GSplatContextManager:
         view = xyz3 @ w2cT[:3, :3] + w2cT[:3, 3]
         idx = view[..., 2].argsort(descending=True)  # S, sorted
         data = data[idx].ravel().contiguous()  # sorted data on gpu
-        timer.record('sorting')
 
         # Upload sorted data to OpenGL for rendering
         from cuda import cudart
@@ -289,7 +281,6 @@ class GSplatContextManager:
                                                   kind,
                                                   stream))
         CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, stream))
-        timer.record('copy')
 
         if self.offline_rendering:
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)  # for offscreen rendering to textures
@@ -326,10 +317,6 @@ class GSplatContextManager:
                                  x, y, x + w, y + h,
                                  gl.GL_COLOR_BUFFER_BIT, gl.GL_LINEAR)  # now self.tex contains the content of the already rendered frame
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, old)
-
-        if not timer.disabled:
-            gl.glFinish()
-        timer.record('rasterize')
 
         # Prepare the output
         if self.offline_rendering and self.offline_writeback:
@@ -381,44 +368,37 @@ class GSplatContextManager:
         raster_settings: 'GaussianRasterizationSettings',
     ):
         # FIXME: This preprocessing stage is extremely slow, need to optimize this to raw cuda or write it in the shader
-        timer.record('other')
         if raster_settings.prefiltered:
 
             if cov3D_precomp is None:
                 cov3D_precomp = build_cov6(scales, rotations)  # N, 6
-                timer.record('cov6')
 
             if colors_precomp is None:
-                C = raster_settings.campos.to('cuda', non_blocking=True)  # 3,
+                C = torch.as_tensor(raster_settings.campos).to('cuda', non_blocking=True)  # 3,
                 dirs = normalize(means3D - C)
                 colors_precomp = eval_sh(raster_settings.sh_degree, shs.mT, dirs)
                 colors_precomp = (colors_precomp + 0.5).clip(0, 1)
-                timer.record('sh')
 
         else:
 
-            visible = in_frustum(means3D, raster_settings.projmatrix.to('cuda', non_blocking=True)).nonzero()[..., 0]  # S, # MARK: SYNC
+            visible = in_frustum(means3D, torch.as_tensor(raster_settings.projmatrix).to('cuda', non_blocking=True)).nonzero()[..., 0]  # S, # MARK: SYNC
             means3D = means3D[visible]
             opacities = opacities[visible]
-            timer.record('frustum')
 
             if cov3D_precomp is None:
                 cov3D_precomp = build_cov6(scales[visible], rotations[visible])
-                timer.record('cov6')
             else:
                 cov3D_precomp = cov3D_precomp[visible]
 
             if colors_precomp is None:
-                C = raster_settings.campos.to('cuda', non_blocking=True)  # 3,
+                C = torch.as_tensor(raster_settings.campos).to('cuda', non_blocking=True)  # 3,
                 dirs = normalize(means3D - C)
                 colors_precomp = eval_sh(raster_settings.sh_degree, shs[visible].mT, dirs)
                 colors_precomp = (colors_precomp + 0.5).clip(0, 1)
-                timer.record('sh')
             else:
                 colors_precomp = colors_precomp[visible]
 
         rgba_map = self.render(means3D, cov3D_precomp, colors_precomp, opacities, raster_settings)
-        timer.record('return')
 
         if self.offline_rendering and self.offline_writeback:
             image, alpha = rgba_map.split([3, 1], dim=-1)
