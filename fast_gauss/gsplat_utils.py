@@ -282,33 +282,25 @@ class GSplatContextManager:
                                                   stream))
         CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, stream))
 
-        if self.offline_rendering:
+        x, y, w, h = gl.glGetIntegerv(gl.GL_VIEWPORT)
+        if self.offline_rendering or not (W == w and H == h and x == 0 and y == 0):
+            # Will render to the texture and then perform a blit
+            old = gl.glGetInteger(gl.GL_DRAW_FRAMEBUFFER_BINDING)
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)  # for offscreen rendering to textures
             gl.glClearColor(0, 0, 0, 1.)
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
-        self.upload_gl_uniforms(raster_settings)
-        x, y, w, h = gl.glGetIntegerv(gl.GL_VIEWPORT)
-
-        if W == w and H == h and x == 0 and y == 0:
-            # Will simply render to the currently bound framebuffer
-            gl.glBindVertexArray(self.vao)
-            gl.glDrawArrays(gl.GL_POINTS, 0, len(xyz3))  # number of vertices
-            gl.glBindVertexArray(0)
-        else:
-            # Will render to the texture and then perform a blit
-            old = gl.glGetInteger(gl.GL_DRAW_FRAMEBUFFER_BINDING)
-            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
-            gl.glClearColor(0, 0, 0, 1.)
-            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-
+        if not (W == w and H == h and x == 0 and y == 0):
             gl.glViewport(0, 0, W, H)
             gl.glScissor(0, 0, W, H)  # only render in this small region of the viewport
 
-            gl.glBindVertexArray(self.vao)
-            gl.glDrawArrays(gl.GL_POINTS, 0, len(xyz3))  # number of vertices
-            gl.glBindVertexArray(0)
+        # Will simply render to the currently bound framebuffer
+        self.upload_gl_uniforms(raster_settings)
+        gl.glBindVertexArray(self.vao)
+        gl.glDrawArrays(gl.GL_POINTS, 0, len(xyz3))  # number of vertices
+        gl.glBindVertexArray(0)
 
+        if not (W == w and H == h and x == 0 and y == 0):
             gl.glViewport(x, y, w, h)
             gl.glScissor(x, y, w, h)  # only render in this small region of the viewport
 

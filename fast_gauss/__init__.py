@@ -21,7 +21,7 @@ class GaussianRasterizationSettings(NamedTuple):
     prefiltered: bool = True
     debug: bool = False
     use_depth: bool = False
-
+    use_normal: bool = False
     solid_mode: bool = False
 
 
