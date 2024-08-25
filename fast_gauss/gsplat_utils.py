@@ -310,6 +310,12 @@ class GSplatContextManager:
                                  gl.GL_COLOR_BUFFER_BIT, gl.GL_LINEAR)  # now self.tex contains the content of the already rendered frame
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, old)
 
+        # TODO: Implement rendering normal as the gradient on screen space depth
+        # Need to use textures instead of renderbuffers?
+        # Should we do this in CUDA or just in plain OpenGL?
+        # If in CUDA, need to perform some copy operations, but renderbuffers should be fine
+        # If in OpenGL, we need to divise a full screen quad and perform the gradient computation using a texture in the fragment shader
+
         # Prepare the output
         if self.offline_rendering and self.offline_writeback:
             rgba_map = torch.empty((H, W, 4), dtype=self.tex_dtype, device='cuda')  # to hold the data from opengl
