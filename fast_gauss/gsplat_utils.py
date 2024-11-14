@@ -254,8 +254,8 @@ class GSplatContextManager:
                     raster_settings[key] = torch.from_numpy(raster_settings[key]).type(self.dtype).numpy()  # HACK: More efficient way?
 
         # Prepare OpenGL texture size
-        H, W = raster_settings.image_height, raster_settings.image_width
-        self.resize_textures(H, W)
+        render_h, render_w = raster_settings.image_height, raster_settings.image_width
+        self.resize_textures(render_h, render_w)
         self.resize_buffers(len(xyz3))
 
         # Sort by view space depth
@@ -282,31 +282,35 @@ class GSplatContextManager:
                                                   stream))
         CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, self.cu_vbo, stream))
 
-        x, y, w, h = gl.glGetIntegerv(gl.GL_VIEWPORT)
-        if self.offline_rendering or not (W == w and H == h and x == 0 and y == 0):
+        fb_x, fb_y, fb_w, fb_h = gl.glGetIntegerv(gl.GL_VIEWPORT)
+        if self.offline_rendering or not (render_w == fb_w and render_h == fb_h and fb_x == 0 and fb_y == 0):
+            # Offline rendering or rendering to a differenly sized framebuffer
             # Will render to the texture and then perform a blit
             old = gl.glGetInteger(gl.GL_DRAW_FRAMEBUFFER_BINDING)
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)  # for offscreen rendering to textures
             gl.glClearColor(0, 0, 0, 1.)
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
-        if not (W == w and H == h and x == 0 and y == 0):
-            gl.glViewport(0, 0, W, H)
-            gl.glScissor(0, 0, W, H)  # only render in this small region of the viewport
+        if not (render_w == fb_w and render_h == fb_h and fb_x == 0 and fb_y == 0):
+            # Change the viewport and scissor test region
+            gl.glViewport(0, 0, render_w, render_h)
+            gl.glScissor(0, 0, render_w, render_h)  # only render in this small region of the viewport
 
+        # Perform the actual rendering
         # Will simply render to the currently bound framebuffer
         self.upload_gl_uniforms(raster_settings)
         gl.glBindVertexArray(self.vao)
         gl.glDrawArrays(gl.GL_POINTS, 0, len(xyz3))  # number of vertices
         gl.glBindVertexArray(0)
 
-        if not (W == w and H == h and x == 0 and y == 0):
-            gl.glViewport(x, y, w, h)
-            gl.glScissor(x, y, w, h)  # only render in this small region of the viewport
+        if not self.offline_rendering and not (render_w == fb_w and render_h == fb_h and fb_x == 0 and fb_y == 0):
+            # Restore the original framebuffer and viewport
+            gl.glViewport(fb_x, fb_y, fb_w, fb_h)
+            gl.glScissor(fb_x, fb_y, fb_w, fb_h)  # only render in this small region of the viewport
 
             gl.glBindFramebuffer(gl.GL_DRAW_FRAMEBUFFER, old)  # read buffer defaults to 0
-            gl.glBlitFramebuffer(0, 0, W, H,
-                                 x, y, x + w, y + h,
+            gl.glBlitFramebuffer(0, 0, render_w, render_h,
+                                 fb_x, fb_y, fb_x + fb_w, fb_y + fb_h,
                                  gl.GL_COLOR_BUFFER_BIT, gl.GL_LINEAR)  # now self.tex contains the content of the already rendered frame
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, old)
 
@@ -316,42 +320,44 @@ class GSplatContextManager:
         # If in CUDA, need to perform some copy operations, but renderbuffers should be fine
         # If in OpenGL, we need to divise a full screen quad and perform the gradient computation using a texture in the fragment shader
 
-        # Prepare the output
-        if self.offline_rendering and self.offline_writeback:
-            rgba_map = torch.empty((H, W, 4), dtype=self.tex_dtype, device='cuda')  # to hold the data from opengl
-            # Texture access and copy could be very slow...
-            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
-
-            # Copy rendered image and depth back as tensor
-            cu_tex = self.cu_tex
-
-            # The resources in resources may be accessed by CUDA until they are unmapped.
-            # The graphics API from which resources were registered should not access any resources while they are mapped by CUDA.
-            # If an application does so, the results are undefined.
-            CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, cu_tex, stream))
-            cu_tex_arr = CHECK_CUDART_ERROR(cudart.cudaGraphicsSubResourceGetMappedArray(cu_tex, 0, 0))
-            CHECK_CUDART_ERROR(cudart.cudaMemcpy2DFromArrayAsync(rgba_map.data_ptr(),  # dst
-                                                                 W * 4 * rgba_map.element_size(),  # dpitch
-                                                                 cu_tex_arr,  # src
-                                                                 0,  # wOffset
-                                                                 0,  # hOffset
-                                                                 W * 4 * rgba_map.element_size(),  # width Width of matrix transfer (columns in bytes)
-                                                                 H,  # height
-                                                                 kind,  # kind
-                                                                 stream))  # stream
-            CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, stream))
-
-            if rgba_map.dtype != xyz3.dtype:
-                warn_once(yellow(f'[FAST GAUSS] Using render buffer dtype {rgba_map.dtype}, expected {xyz3.dtype} for the output, will cast to {xyz3.dtype}'))
-                if not torch.is_floating_point(rgba_map):
-                    warn_once(yellow(f'[FAST GAUSS] Using a non-floating-point render buffer dtype: {rgba_map.dtype}, this might cause some precision loss'))
-                    rgba_map = rgba_map / torch.iinfo(rgba_map.dtype).max  # should be 255 for uint8
-                else:
-                    rgba_map = rgba_map.to(xyz3.dtype)
-
-            return rgba_map  # H, W, 4
-        else:
+        # Early return if in online rendering mode
+        if not self.offline_rendering and self.offline_writeback:
             return None
+
+        # Prepare the output for offline rendering
+        rgba_map = torch.empty((render_h, render_w, 4), dtype=self.tex_dtype, device='cuda')  # to hold the data from opengl
+        # Texture access and copy could be very slow...
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+
+        # Copy rendered image and depth back as tensor
+        cu_tex = self.cu_tex
+
+        # The resources in resources may be accessed by CUDA until they are unmapped.
+        # The graphics API from which resources were registered should not access any resources while they are mapped by CUDA.
+        # If an application does so, the results are undefined.
+        CHECK_CUDART_ERROR(cudart.cudaGraphicsMapResources(1, cu_tex, stream))
+        cu_tex_arr = CHECK_CUDART_ERROR(cudart.cudaGraphicsSubResourceGetMappedArray(cu_tex, 0, 0))
+        CHECK_CUDART_ERROR(cudart.cudaMemcpy2DFromArrayAsync(rgba_map.data_ptr(),  # dst
+                                                             render_w * 4 * rgba_map.element_size(),  # dpitch
+                                                             cu_tex_arr,  # src
+                                                             0,  # wOffset
+                                                             0,  # hOffset
+                                                             render_w * 4 * rgba_map.element_size(),  # width Width of matrix transfer (columns in bytes)
+                                                             render_h,  # height
+                                                             kind,  # kind
+                                                             stream))  # stream
+        CHECK_CUDART_ERROR(cudart.cudaGraphicsUnmapResources(1, cu_tex, stream))
+
+        if rgba_map.dtype != xyz3.dtype:
+            warn_once(yellow(f'[FAST GAUSS] Using render buffer dtype {rgba_map.dtype}, expected {xyz3.dtype} for the output, will cast to {xyz3.dtype}'))
+            if not torch.is_floating_point(rgba_map):
+                warn_once(yellow(f'[FAST GAUSS] Using a non-floating-point render buffer dtype: {rgba_map.dtype}, this might cause some precision loss'))
+                rgba_map = rgba_map / torch.iinfo(rgba_map.dtype).max  # should be 255 for uint8
+            else:
+                rgba_map = rgba_map.to(xyz3.dtype)
+
+        rgba_map[..., -1] = 1.0  # unreliable alpha channel
+        return rgba_map  # render_h, render_w, 4
 
     def rasterize_gaussians(
         self,
