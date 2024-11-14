@@ -23,6 +23,7 @@ class GaussianRasterizationSettings(NamedTuple):
     use_depth: bool = False
     use_normal: bool = False
     solid_mode: bool = False
+    edge_mode: bool = False
 
 
 class GaussianRasterizer:

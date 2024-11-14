@@ -99,6 +99,7 @@ class GSplatContextManager:
         self.uniforms.basisViewport = gl.glGetUniformLocation(program, "basisViewport")
         self.uniforms.useDepth = gl.glGetUniformLocation(program, "useDepth")
         self.uniforms.solidMode = gl.glGetUniformLocation(program, "solidMode")
+        self.uniforms.edgeMode = gl.glGetUniformLocation(program, "edgeMode")
 
     def upload_gl_uniforms(self, raster_settings: 'GaussianRasterizationSettings'):
         # FIXME: Possible nasty synchronization issue: raster_settings might contain cuda tensors
@@ -136,6 +137,7 @@ class GSplatContextManager:
         gl.glUniform2f(self.uniforms.basisViewport, 1 / raster_settings.image_width, 1 / raster_settings.image_height)  # focal
         gl.glUniform1i(self.uniforms.useDepth, 1 if raster_settings.use_depth else 0)
         gl.glUniform1i(self.uniforms.solidMode, 1 if raster_settings.solid_mode else 0)
+        gl.glUniform1i(self.uniforms.edgeMode, 1 if raster_settings.edge_mode else 0)
 
     def init_gl_buffers(self, v: int = 0):
         from cuda import cudart
