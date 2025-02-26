@@ -239,6 +239,9 @@ class GSplatContextManager:
 
     @torch.no_grad()
     def render(self, xyz3: torch.Tensor, cov6: torch.Tensor, rgb3: torch.Tensor, occ1: torch.Tensor, raster_settings: 'GaussianRasterizationSettings'):
+        # TODO: Faster way to do this?
+        self.use_gl_program(self.gsplat_program)
+
         # Compute GS
         data = torch.cat([xyz3, cov6, rgb3, occ1], dim=-1)  # slow memory operation
         stream = torch.cuda.current_stream().cuda_stream
